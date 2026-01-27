@@ -32,7 +32,7 @@ import {
   type AsignacionCompleta,
 } from "../lib/authService";
 // import logoClinica from "figma:asset/535c4fa3c95ae864b14ba302621119ba18d73bbc.png";
-const logoClinica = '/logo.png'; // TODO: Reemplazar con la ruta correcta del logo
+const logoClinica = 'https://clinicas-atlas.com/wp-content/uploads/2024/11/clinicas-atlas-ecuador.png';
 
 interface LoginProps {
   onLogin: (
