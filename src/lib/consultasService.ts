@@ -1,0 +1,115 @@
+import { supabaseAdmin } from './supabase';  // ⚡ Cambio: usar supabaseAdmin para bypasear RLS
+
+export interface ConsultaMedica {
+  id_consulta_medica: number;
+  id_cita: number;
+  id_paciente: number;
+  id_usuario: number;
+  fecha_consulta: string;
+  historial_clinico: string | null;
+  diagnostico: string | null;
+  receta_medica: string | null;
+  pedido_examenes: string | null;
+  observaciones: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Crear una nueva consulta médica
+ */
+export async function crearConsultaMedica(
+  consulta: Omit<ConsultaMedica, 'id_consulta_medica' | 'created_at' | 'updated_at' | 'fecha_consulta'>
+): Promise<ConsultaMedica | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('consulta_medica')
+      .insert({
+        ...consulta,
+        fecha_consulta: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Obtener consulta médica por ID de cita
+ */
+export async function getConsultaMedicaByCita(idCita: number): Promise<ConsultaMedica | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('consulta_medica')
+      .select('*')
+      .eq('id_cita', idCita)
+      .single();
+
+    if (error) {
+      // No hay consulta médica para esta cita (es normal)
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Error al obtener consulta médica:', error);
+    return null;
+  }
+}
+
+/**
+ * Obtener todas las consultas médicas de un paciente
+ */
+export async function getConsultasMedicasByPaciente(idPaciente: number): Promise<ConsultaMedica[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('consulta_medica')
+      .select('*')
+      .eq('id_paciente', idPaciente)
+      .order('fecha_consulta', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error al obtener consultas médicas del paciente:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error inesperado al obtener consultas médicas:', error);
+    return [];
+  }
+}
+
+/**
+ * Actualizar una consulta médica existente
+ */
+export async function actualizarConsultaMedica(
+  idConsultaMedica: number,
+  cambios: Partial<Omit<ConsultaMedica, 'id_consulta_medica' | 'id_cita' | 'id_paciente' | 'id_usuario' | 'created_at' | 'updated_at'>>
+): Promise<ConsultaMedica | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('consulta_medica')
+      .update(cambios)
+      .eq('id_consulta_medica', idConsultaMedica)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error al actualizar consulta médica:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('❌ Error inesperado al actualizar consulta médica:', error);
+    return null;
+  }
+}

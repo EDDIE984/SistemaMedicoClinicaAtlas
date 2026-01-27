@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Login - MediControl</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        pre {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        .error { color: #ef4444; }
+        .success { color: #10b981; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico de Login</h1>
+    <p>Esta herramienta te ayudará a identificar el problema de autenticación.</p>
+
+    <div class="test-section">
+        <h2>Test 1: Verificar Conexión a Supabase</h2>
+        <button onclick="testConnection()">🔌 Probar Conexión</button>
+        <pre id="result1">Esperando...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Verificar Estructura de Tabla Usuario</h2>
+        <button onclick="testTableStructure()">📋 Ver Columnas</button>
+        <pre id="result2">Esperando...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Buscar Usuario juan.yepez@hospital.com</h2>
+        <button onclick="testFindUser()">👤 Buscar Usuario</button>
+        <pre id="result3">Esperando...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Listar TODOS los Usuarios</h2>
+        <button onclick="testListAllUsers()">📜 Listar Usuarios</button>
+        <pre id="result4">Esperando...</pre>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 5: Validar Login Completo</h2>
+        <input type="email" id="testEmail" placeholder="Email" value="juan.yepez@hospital.com" style="width: 300px; padding: 8px; margin-right: 10px;">
+        <input type="password" id="testPassword" placeholder="Password" value="password123" style="width: 200px; padding: 8px; margin-right: 10px;">
+        <button onclick="testFullLogin()">🔐 Probar Login</button>
+        <pre id="result5">Esperando...</pre>
+    </div>
+
+    <script type="module">
+        import { supabase } from './lib/supabase.js';
+        
+        window.testConnection = async function() {
+            const result = document.getElementById('result1');
+            result.textContent = '⏳ Probando conexión...';
+            
+            try {
+                const { data, error } = await supabase
+                    .from('usuario')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    result.innerHTML = `<span class="error">❌ ERROR:\n${JSON.stringify(error, null, 2)}</span>`;
+                    return;
+                }
+                
+                result.innerHTML = `<span class="success">✅ CONEXIÓN EXITOSA\nSupabase está funcionando correctamente</span>`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ ERROR CRÍTICO:\n${error.message}</span>`;
+            }
+        };
+
+        window.testTableStructure = async function() {
+            const result = document.getElementById('result2');
+            result.textContent = '⏳ Consultando estructura...';
+            
+            try {
+                const { data, error } = await supabase
+                    .from('usuario')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    result.innerHTML = `<span class="error">❌ ERROR:\n${JSON.stringify(error, null, 2)}</span>`;
+                    return;
+                }
+                
+                if (data && data.length > 0) {
+                    const columns = Object.keys(data[0]);
+                    result.innerHTML = `<span class="success">✅ COLUMNAS ENCONTRADAS:\n${columns.join('\n')}\n\n📊 Primer registro:\n${JSON.stringify(data[0], null, 2)}</span>`;
+                } else {
+                    result.innerHTML = `<span class="error">⚠️ La tabla está vacía\nNo hay usuarios en la base de datos</span>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ ERROR:\n${error.message}</span>`;
+            }
+        };
+
+        window.testFindUser = async function() {
+            const result = document.getElementById('result3');
+            result.textContent = '⏳ Buscando usuario...';
+            
+            try {
+                // Intentar con 'email'
+                let { data, error } = await supabase
+                    .from('usuario')
+                    .select('*')
+                    .eq('email', 'juan.yepez@hospital.com');
+                
+                if (error || !data || data.length === 0) {
+                    // Intentar con 'correo'
+                    const result2 = await supabase
+                        .from('usuario')
+                        .select('*')
+                        .eq('correo', 'juan.yepez@hospital.com');
+                    
+                    data = result2.data;
+                    error = result2.error;
+                }
+                
+                if (error) {
+                    result.innerHTML = `<span class="error">❌ ERROR:\n${JSON.stringify(error, null, 2)}</span>`;
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    result.innerHTML = `<span class="error">❌ USUARIO NO ENCONTRADO\njuan.yepez@hospital.com no existe en la BD</span>`;
+                    return;
+                }
+                
+                result.innerHTML = `<span class="success">✅ USUARIO ENCONTRADO:\n${JSON.stringify(data[0], null, 2)}</span>`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ ERROR:\n${error.message}</span>`;
+            }
+        };
+
+        window.testListAllUsers = async function() {
+            const result = document.getElementById('result4');
+            result.textContent = '⏳ Listando usuarios...';
+            
+            try {
+                const { data, error } = await supabase
+                    .from('usuario')
+                    .select('*')
+                    .limit(10);
+                
+                if (error) {
+                    result.innerHTML = `<span class="error">❌ ERROR:\n${JSON.stringify(error, null, 2)}</span>`;
+                    return;
+                }
+                
+                if (!data || data.length === 0) {
+                    result.innerHTML = `<span class="error">⚠️ NO HAY USUARIOS\nLa tabla está vacía</span>`;
+                    return;
+                }
+                
+                result.innerHTML = `<span class="success">✅ ENCONTRADOS ${data.length} USUARIOS:\n${JSON.stringify(data, null, 2)}</span>`;
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ ERROR:\n${error.message}</span>`;
+            }
+        };
+
+        window.testFullLogin = async function() {
+            const result = document.getElementById('result5');
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            
+            result.textContent = '⏳ Validando credenciales...';
+            
+            try {
+                // Paso 1: Buscar usuario
+                let { data: usuarios, error } = await supabase
+                    .from('usuario')
+                    .select('*')
+                    .eq('email', email);
+                
+                // Si no encuentra con 'email', intentar con 'correo'
+                if ((!usuarios || usuarios.length === 0) && !error) {
+                    const result2 = await supabase
+                        .from('usuario')
+                        .select('*')
+                        .eq('correo', email);
+                    usuarios = result2.data;
+                    error = result2.error;
+                }
+                
+                if (error) {
+                    result.innerHTML = `<span class="error">❌ ERROR AL BUSCAR:\n${JSON.stringify(error, null, 2)}</span>`;
+                    return;
+                }
+                
+                if (!usuarios || usuarios.length === 0) {
+                    result.innerHTML = `<span class="error">❌ USUARIO NO ENCONTRADO\n${email} no existe en la base de datos</span>`;
+                    return;
+                }
+                
+                const usuario = usuarios[0];
+                
+                // Paso 2: Verificar si tiene campo password
+                if (!usuario.password && !usuario.hashedPassword) {
+                    result.innerHTML = `<span class="error">❌ ERROR DE ESQUEMA\nLa tabla 'usuario' NO TIENE campo 'password'\n\nColumnas disponibles:\n${Object.keys(usuario).join(', ')}\n\n🔧 SOLUCIÓN: Necesitas actualizar el esquema de la BD</span>`;
+                    return;
+                }
+                
+                // Paso 3: Validar password
+                const dbPassword = usuario.password || usuario.hashedPassword;
+                if (dbPassword !== password) {
+                    result.innerHTML = `<span class="error">❌ CONTRASEÑA INCORRECTA\nEsperada: ${dbPassword}\nRecibida: ${password}</span>`;
+                    return;
+                }
+                
+                // Paso 4: Verificar asignaciones
+                const { data: asignaciones, error: errorAsig } = await supabase
+                    .from('usuario_sucursal')
+                    .select('*')
+                    .eq('id_usuario', usuario.id_usuario);
+                
+                if (errorAsig) {
+                    result.innerHTML = `<span class="error">⚠️ LOGIN OK pero ERROR EN ASIGNACIONES:\n${JSON.stringify(errorAsig, null, 2)}</span>`;
+                    return;
+                }
+                
+                if (!asignaciones || asignaciones.length === 0) {
+                    result.innerHTML = `<span class="error">⚠️ LOGIN OK pero SIN ASIGNACIONES\nEl usuario ${usuario.nombre} no tiene sucursales asignadas</span>`;
+                    return;
+                }
+                
+                result.innerHTML = `<span class="success">✅ LOGIN EXITOSO!\n\nUsuario:\n${JSON.stringify(usuario, null, 2)}\n\nAsignaciones (${asignaciones.length}):\n${JSON.stringify(asignaciones, null, 2)}</span>`;
+                
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ ERROR CRÍTICO:\n${error.message}\n${error.stack}</span>`;
+            }
+        };
+    </script>
+</body>
+</html>
