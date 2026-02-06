@@ -106,11 +106,11 @@ export const consultarCedulaRegistroCivil = async (cedula: string): Promise<Pers
             return null;
         }
 
-        const targetUrl = `http://nessoftfact-001-site6.atempurl.com/api/ConsultasDatos/ConsultaCedulaV2?Cedula=${cedula}&Apikey=${apiKey}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+        // Usar el nuevo proxy serverless interno de Vercel para evitar errores CORS y 403
+        const proxyUrl = `/api/consulta-cedula?Cedula=${cedula}&Apikey=${apiKey}`;
 
-        console.log('Fetching via Proxy:', proxyUrl);
-        toast.info('DEBUG: Consultando registro civil...');
+        console.log('Fetching via Internal Proxy:', proxyUrl);
+        toast.info('Consultando registro civil...');
 
         const response = await fetch(proxyUrl);
 
