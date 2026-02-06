@@ -7,6 +7,8 @@ import { getCitasByPaciente, formatearFecha, formatearHora, getColorEstado, marc
 import { crearConsultaMedica, getConsultaMedicaByCita, type ConsultaMedica } from '../lib/consultasService.ts';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { consultarCedulaRegistroCivil } from '../lib/registroCivilService';
+
 
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -116,6 +118,7 @@ export function PacientesViewSupabase({
   const [isConsultaDialogOpen, setIsConsultaDialogOpen] = useState(false);
   const [isSavingConsulta, setIsSavingConsulta] = useState(false);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
+  const [isSearchingCedula, setIsSearchingCedula] = useState(false); // Estado para loading de cédula
 
 
   // Estado para citas del paciente seleccionado
@@ -149,6 +152,32 @@ export function PacientesViewSupabase({
     telefono: '',
     direccion: '',
   });
+
+  // Consultar datos de registro civil al perder foco en cédula
+  const handleBlurCedula = async () => {
+    const cedula = newPatient.cedula;
+    if (!cedula || cedula.length < 10) return;
+
+    setIsSearchingCedula(true);
+    try {
+      const datos = await consultarCedulaRegistroCivil(cedula);
+      if (datos) {
+        setNewPatient(prev => ({
+          ...prev,
+          nombres: datos.nombres || prev.nombres,
+          apellidos: datos.apellidos || prev.apellidos,
+          fecha_nacimiento: datos.fecha_nacimiento || prev.fecha_nacimiento,
+          sexo: datos.sexo,
+          direccion: datos.direccion || prev.direccion
+        }));
+        toast.success('Datos encontrados y cargados');
+      }
+    } catch (error) {
+      console.error('Error al consultar cédula:', error);
+    } finally {
+      setIsSearchingCedula(false);
+    }
+  };
 
   // Formulario de signos vitales
   const [signosVitalesForm, setSignosVitalesForm] = useState({
@@ -1266,6 +1295,20 @@ export function PacientesViewSupabase({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label htmlFor="cedula">Cédula/ID *</Label>
+                {isSearchingCedula && <span className="text-xs text-blue-600 flex items-center"><Loader2 className="size-3 animate-spin mr-1" /> Buscando...</span>}
+              </div>
+              <Input
+                id="cedula"
+                value={newPatient.cedula}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, cedula: e.target.value })}
+                onBlur={handleBlurCedula}
+                placeholder="0000000000"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="nombres">Nombres *</Label>
               <Input
                 id="nombres"
@@ -1282,16 +1325,6 @@ export function PacientesViewSupabase({
                 value={newPatient.apellidos}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, apellidos: e.target.value })}
                 placeholder="Apellidos"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="cedula">Cédula/ID *</Label>
-              <Input
-                id="cedula"
-                value={newPatient.cedula}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, cedula: e.target.value })}
-                placeholder="0000000000"
               />
             </div>
 

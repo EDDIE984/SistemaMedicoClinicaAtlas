@@ -8,10 +8,19 @@ import { Checkbox } from './ui/checkbox';
 import { useCitas } from '../hooks/useCitas';
 import { AgendarCitaModalSupabase } from './AgendarCitaModalSupabase';
 import { CancelarCitaModalSupabase } from './CancelarCitaModalSupabase';
+import { DetalleCitaDialog } from './DetalleCitaDialog';
 import { SupabaseIndicator } from './SupabaseIndicator';
 import { toast } from 'sonner';
 import type { CitaCompleta } from '../lib/citasService';
 import { calcularEdad } from '../lib/pacientesService';
+import { getSucursalesByCompania, getMedicosBySucursal, type AsignacionCompleta } from '../lib/authService';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 interface AgendaViewProps {
   currentUser?: {
@@ -29,8 +38,16 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
   const [mostrarCanceladas, setMostrarCanceladas] = useState(false);
   const [vistaActual, setVistaActual] = useState<'semana' | 'lista'>('semana');
   const [idUsuarioActual, setIdUsuarioActual] = useState<number | null>(null);
-  const [citaHover, setCitaHover] = useState<number | null>(null);
+  const [citaDetalle, setCitaDetalle] = useState<CitaCompleta | null>(null);
   const [nombreSucursal, setNombreSucursal] = useState<string>('');
+
+  // Filtros
+  const [sucursales, setSucursales] = useState<any[]>([]);
+  const [medicos, setMedicos] = useState<AsignacionCompleta[]>([]);
+  const [filterSucursal, setFilterSucursal] = useState<string>(() => {
+    return localStorage.getItem('currentSucursalId') || '';
+  });
+  const [filterMedico, setFilterMedico] = useState<string>('all');
 
   // Obtener el ID del usuario desde localStorage
   useEffect(() => {
@@ -46,6 +63,42 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
       setNombreSucursal((currentUser as any).sucursal || '');
     }
   }, [currentUser]);
+
+  // Cargar sucursales al inicio
+  useEffect(() => {
+    const cargarSucursales = async () => {
+      const companiaId = localStorage.getItem('currentCompaniaId');
+      if (companiaId) {
+        const data: any[] = await getSucursalesByCompania(parseInt(companiaId));
+        setSucursales(data);
+
+        // Si no hay sucursal seleccionada y hay datos, seleccionar la primera o la almacenada
+        if (!filterSucursal && data.length > 0) {
+          const defaultSucursalId = localStorage.getItem('currentSucursalId');
+          if (defaultSucursalId && data.some(s => s.id_sucursal.toString() === defaultSucursalId)) {
+            setFilterSucursal(defaultSucursalId);
+          } else {
+            setFilterSucursal(data[0].id_sucursal.toString());
+          }
+        }
+      }
+    };
+    cargarSucursales();
+  }, []);
+
+  // Cargar médicos cuando cambia la sucursal seleccionada
+  useEffect(() => {
+    const cargarMedicos = async () => {
+      if (filterSucursal && filterSucursal !== 'all') {
+        const data = await getMedicosBySucursal(parseInt(filterSucursal));
+        setMedicos(data);
+      } else {
+        setMedicos([]); // Opcional: cargar todos los médicos de la compañía si se requieren
+      }
+      setFilterMedico('all'); // Resetear filtro de médico
+    };
+    cargarMedicos();
+  }, [filterSucursal]);
 
   // Calcular rango de fechas para la semana actual
   const getWeekRange = (date: Date) => {
@@ -114,17 +167,24 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
   };
 
   // Filtrar citas por día
+  // Filtrar citas por día y filtros activos
+  // Filtrar citas por día y filtros activos
   const getCitasPorDia = (fecha: Date) => {
     const fechaStr = fecha.toISOString().split('T')[0];
     const citasDelDia = citas.filter(cita => {
       const citaFecha = cita.fecha_cita;
-      const cumpleFiltro = mostrarCanceladas || cita.estado_cita !== 'cancelada';
-      return citaFecha === fechaStr && cumpleFiltro;
+      const cumpleFiltroCanceladas = mostrarCanceladas || cita.estado_cita !== 'cancelada';
+
+      // Filtro de Sucursal
+      const cumpleFiltroSucursal = !filterSucursal || filterSucursal === 'all' ||
+        cita.usuario_sucursal.sucursal.id_sucursal === parseInt(filterSucursal);
+
+      // Filtro de Médico
+      const cumpleFiltroMedico = filterMedico === 'all' ||
+        cita.usuario_sucursal.usuario.id_usuario === parseInt(filterMedico);
+
+      return citaFecha === fechaStr && cumpleFiltroCanceladas && cumpleFiltroSucursal && cumpleFiltroMedico;
     });
-
-    if (citasDelDia.length > 0) {
-
-    }
 
     return citasDelDia;
   };
@@ -156,9 +216,19 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
 
   // Vista de Lista
   const renderVistaLista = () => {
-    const citasFiltradas = mostrarCanceladas
-      ? citas
-      : citas.filter(c => c.estado_cita !== 'cancelada');
+    const citasFiltradas = citas.filter(cita => {
+      const cumpleFiltroCanceladas = mostrarCanceladas || cita.estado_cita !== 'cancelada';
+
+      // Filtro de Sucursal
+      const cumpleFiltroSucursal = !filterSucursal || filterSucursal === 'all' ||
+        cita.usuario_sucursal.sucursal.id_sucursal === parseInt(filterSucursal);
+
+      // Filtro de Médico
+      const cumpleFiltroMedico = filterMedico === 'all' ||
+        cita.usuario_sucursal.usuario.id_usuario === parseInt(filterMedico);
+
+      return cumpleFiltroCanceladas && cumpleFiltroSucursal && cumpleFiltroMedico;
+    });
 
     return (
       <div className="space-y-3">
@@ -263,134 +333,34 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
                   <div
                     key={cita.id_cita}
                     className="relative"
-                    onMouseEnter={() => setCitaHover(cita.id_cita)}
-                    onMouseLeave={() => setCitaHover(null)}
                   >
                     <Card
                       className={`p-2 cursor-pointer hover:shadow-md transition-shadow ${cita.estado_cita === 'cancelada' ? 'opacity-50' : ''
                         }`}
+                      onClick={() => setCitaDetalle(cita)}
                     >
                       <div className="text-xs space-y-1">
-                        <div className="flex items-center gap-1">
-                          <Clock className="size-3 text-gray-500" />
-                          <span className="font-semibold">{cita.hora_inicio.substring(0, 5)}</span>
+                        <div className="flex items-center gap-1 font-semibold text-blue-700">
+                          <Clock className="size-3" />
+                          <span>{cita.hora_inicio.substring(0, 5)}</span>
                         </div>
-                        <div className="font-medium truncate">
-                          {cita.paciente.nombres} {cita.paciente.apellidos}
+                        <div className="text-[10px] text-gray-500 font-medium truncate">
+                          Dr. {cita.usuario_sucursal.usuario.apellido.split(' ')[0]}
+                        </div>
+                        <div className="font-medium truncate text-gray-900">
+                          {cita.paciente.nombres.split(' ')[0]} {cita.paciente.apellidos.split(' ')[0]}
                         </div>
                         <div className="text-xs text-gray-500 truncate">
                           {cita.motivo_consulta}
                         </div>
                         <Badge
                           variant={cita.estado_cita === 'cancelada' ? 'destructive' : cita.consulta_realizada ? 'default' : 'secondary'}
-                          className="text-xs"
+                          className="text-[10px] px-1 h-5"
                         >
                           {cita.estado_cita === 'cancelada' ? 'Cancelada' : cita.consulta_realizada ? 'Completada' : 'Programada'}
                         </Badge>
                       </div>
                     </Card>
-
-                    {/* Popover con detalles */}
-                    {citaHover === cita.id_cita && (
-                      <div
-                        className="absolute left-full ml-2 top-0 z-50 w-80 bg-white rounded-lg shadow-xl border border-gray-200 p-4"
-                        style={{
-                          animation: 'fadeIn 0.15s ease-in-out'
-                        }}
-                      >
-                        <div className="space-y-3">
-                          {/* Header */}
-                          <div className="flex items-start justify-between pb-3 border-b">
-                            <div>
-                              <h3 className="font-semibold text-sm">
-                                {cita.paciente.nombres} {cita.paciente.apellidos}
-                              </h3>
-                              <p className="text-xs text-gray-500">
-                                {cita.paciente.fecha_nacimiento && `${calcularEdad(cita.paciente.fecha_nacimiento)} años`}
-                              </p>
-                            </div>
-                            <Badge
-                              variant={cita.estado_cita === 'cancelada' ? 'destructive' : cita.consulta_realizada ? 'default' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {cita.estado_cita === 'cancelada' ? 'Cancelada' : cita.consulta_realizada ? 'Completada' : 'Programada'}
-                            </Badge>
-                          </div>
-
-                          {/* Información de contacto */}
-                          <div className="space-y-2 text-xs">
-                            {cita.paciente.telefono && (
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Phone className="size-3" />
-                                <span>{cita.paciente.telefono}</span>
-                              </div>
-                            )}
-                            {cita.paciente.email && (
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Mail className="size-3" />
-                                <span>{cita.paciente.email}</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <Calendar className="size-3" />
-                              <span>
-                                {new Date(cita.fecha_cita).toLocaleDateString('es-ES', {
-                                  weekday: 'long',
-                                  day: 'numeric',
-                                  month: 'long'
-                                })}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <Clock className="size-3" />
-                              <span>{cita.hora_inicio.substring(0, 5)} - {cita.hora_fin.substring(0, 5)}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-gray-600">
-                              <MapPin className="size-3" />
-                              <span>{cita.usuario_sucursal.sucursal.nombre}</span>
-                            </div>
-                          </div>
-
-                          {/* Motivo de consulta */}
-                          {cita.motivo_consulta && (
-                            <div className="pt-2 border-t">
-                              <p className="text-xs font-medium text-gray-700 mb-1">Motivo de consulta:</p>
-                              <p className="text-xs text-gray-600">{cita.motivo_consulta}</p>
-                            </div>
-                          )}
-
-                          {/* Botones de acción */}
-                          {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && (
-                            <div className="space-y-2 pt-3 border-t">
-                              <Button
-                                size="sm"
-                                className="w-full bg-blue-600 hover:bg-blue-700"
-                                onClick={() => handleIniciarConsulta(cita)}
-                              >
-                                <Stethoscope className="size-3 mr-1" />
-                                Iniciar cita
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="w-full bg-gray-600 hover:bg-gray-700 text-white"
-                                onClick={() => handleModificar(cita)}
-                              >
-                                <Calendar className="size-3 mr-1" />
-                                Modificar cita
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="w-full bg-red-600 hover:bg-red-700 text-white"
-                                onClick={() => handleCancelar(cita)}
-                              >
-                                <XCircle className="size-3 mr-1" />
-                                Cancelar cita
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
 
@@ -442,13 +412,42 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Filtro Sucursal */}
+          <Select value={filterSucursal} onValueChange={setFilterSucursal}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="Seleccione sucursal" />
+            </SelectTrigger>
+            <SelectContent>
+              {sucursales.map((sucursal) => (
+                <SelectItem key={sucursal.id_sucursal} value={sucursal.id_sucursal.toString()}>
+                  {sucursal.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Filtro Médico */}
+          <Select value={filterMedico} onValueChange={setFilterMedico}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="Todos los médicos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los médicos</SelectItem>
+              {medicos.map((medico) => (
+                <SelectItem key={medico.usuario?.id_usuario} value={medico.usuario?.id_usuario.toString()}>
+                  {medico.usuario?.nombre} {medico.usuario?.apellido}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <div className="flex items-center gap-2">
             <Checkbox
               id="mostrar-canceladas"
               checked={mostrarCanceladas}
               onCheckedChange={(checked: boolean) => setMostrarCanceladas(checked)}
             />
-            <label htmlFor="mostrar-canceladas" className="text-sm cursor-pointer">
+            <label htmlFor="mostrar-canceladas" className="text-sm cursor-pointer whitespace-nowrap">
               Mostrar canceladas
             </label>
           </div>
@@ -516,6 +515,16 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
         }}
         cita={citaSeleccionada}
         onCitaCancelada={loadCitas}
+      />
+
+      {/* Modal Detalles Cita */}
+      <DetalleCitaDialog
+        isOpen={!!citaDetalle}
+        onClose={() => setCitaDetalle(null)}
+        cita={citaDetalle}
+        onIniciarConsulta={handleIniciarConsulta}
+        onModificar={handleModificar}
+        onCancelar={handleCancelar}
       />
     </div>
   );
