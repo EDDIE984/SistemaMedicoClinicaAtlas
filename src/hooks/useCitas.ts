@@ -12,8 +12,9 @@ import {
   verificarDisponibilidad,
   type CitaCompleta,
   type Cita,
-  type DiaSemana
+  type DiaSemana,
 } from '../lib/citasService';
+import { supabaseAdmin } from '../lib/supabase';
 
 export function useCitas(idUsuario: number | null, fechaInicio: string, fechaFin: string, tipoUsuario?: string) {
   const [citas, setCitas] = useState<CitaCompleta[]>([]);
@@ -40,10 +41,10 @@ export function useCitas(idUsuario: number | null, fechaInicio: string, fechaFin
     console.log('🔍 useCitas - Filtrando por sucursal:', idSucursalNumber || 'todas');
 
     let data;
-    
-    // Si es SECRETARIA, obtener todas las citas de la sucursal
-    if (tipoUsuario === 'secretaria' && idSucursalNumber) {
-      console.log('👩‍💼 useCitas - Cargando citas como SECRETARIA');
+
+    // Si es SECRETARIA o ADMINISTRADOR, obtener todas las citas de la sucursal
+    if ((tipoUsuario === 'secretaria' || tipoUsuario === 'administrador') && idSucursalNumber) {
+      console.log(`👩‍💼 useCitas - Cargando citas como ${tipoUsuario?.toUpperCase()}`);
       data = await getCitasBySucursalYFechas(idSucursalNumber, fechaInicio, fechaFin);
     } else {
       // Si es MÉDICO, obtener solo las citas del usuario
@@ -72,7 +73,7 @@ export function useCitas(idUsuario: number | null, fechaInicio: string, fechaFin
   };
 
   const actualizarCita = async (
-    idCita: number, 
+    idCita: number,
     updates: Partial<Cita>,
     idUsuario?: number,
     motivoCambio?: string
@@ -179,6 +180,32 @@ export function useHorarios(idUsuarioSucursal: number | null) {
     precio,
     isLoading,
     loadHorarios,
-    verificarDisponibilidadHorario
+    verificarDisponibilidadHorario,
+    getCitasDelDia: async (fecha: string) => {
+      if (!idUsuarioSucursal) return [];
+      // Se reutiliza la funcion existente, fechaInicio = fechaFin = fecha
+      // Nota: getCitasByUsuarioYFechas requiere idUsuario, pero aquí tenemos idUsuarioSucursal.
+      // La función getCitasByUsuarioYFechas busca por idUsuario. 
+      // Necesitamos una función que busque por idUsuarioSucursal específicamente o adaptar la logica.
+
+      // Mejor opción: Usar getCitasBySucursalYFechas filtrando luego por el usuario específico si es necesario,
+      // O crear una pequeña consulta directa aquí o en el servicio.
+      // Dado que getCitasByUsuarioYFechas hace una consulta inversa (busca ids de asignaciones),
+      // lo más directo para "agendar cita" (donde ya seleccionamos un médico específico = asignación)
+      // es buscar citas donde id_usuario_sucursal sea el seleccionado.
+
+      const { data, error } = await supabaseAdmin
+        .from('cita')
+        .select('*')
+        .eq('id_usuario_sucursal', idUsuarioSucursal)
+        .eq('fecha_cita', fecha)
+        .neq('estado_cita', 'cancelada');
+
+      if (error) {
+        console.error('❌ Error al obtener citas del día:', error);
+        return [];
+      }
+      return data || [];
+    }
   };
 }

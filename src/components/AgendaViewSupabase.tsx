@@ -100,6 +100,14 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     cargarMedicos();
   }, [filterSucursal]);
 
+  // Helper para formatear fecha local YYYY-MM-DD
+  const formatDateLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Calcular rango de fechas para la semana actual
   const getWeekRange = (date: Date) => {
     const start = new Date(date);
@@ -111,8 +119,8 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     end.setHours(23, 59, 59, 999);
 
     return {
-      inicio: start.toISOString().split('T')[0],
-      fin: end.toISOString().split('T')[0]
+      inicio: formatDateLocal(start),
+      fin: formatDateLocal(end)
     };
   };
 
@@ -170,7 +178,7 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
   // Filtrar citas por día y filtros activos
   // Filtrar citas por día y filtros activos
   const getCitasPorDia = (fecha: Date) => {
-    const fechaStr = fecha.toISOString().split('T')[0];
+    const fechaStr = formatDateLocal(fecha);
     const citasDelDia = citas.filter(cita => {
       const citaFecha = cita.fecha_cita;
       const cumpleFiltroCanceladas = mostrarCanceladas || cita.estado_cita !== 'cancelada';

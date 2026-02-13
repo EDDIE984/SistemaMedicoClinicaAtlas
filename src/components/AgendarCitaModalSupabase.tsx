@@ -216,7 +216,8 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const idAsignacionNum = selectedAsignacion ? parseInt(selectedAsignacion) : null;
   console.log('🎯 AgendarCitaModal - selectedAsignacion:', selectedAsignacion);
   console.log('🎯 AgendarCitaModal - idAsignacionNum:', idAsignacionNum);
-  const { diasSemana, precio, verificarDisponibilidadHorario } = useHorarios(idAsignacionNum);
+  const { diasSemana, precio, verificarDisponibilidadHorario, getCitasDelDia } = useHorarios(idAsignacionNum);
+  const [citasDelDia, setCitasDelDia] = useState<any[]>([]);
 
   console.log('💰 AgendarCitaModal - Precio recibido del hook:', precio);
   console.log('📅 AgendarCitaModal - Días de semana recibidos:', diasSemana.length);
@@ -244,10 +245,28 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     return `${horasFin.toString().padStart(2, '0')}:${minutosFin.toString().padStart(2, '0')}`;
   };
 
+  // Cargar citas del día cuando cambia la fecha o la asignación
+  useEffect(() => {
+    const cargarCitasDia = async () => {
+      if (fecha && selectedAsignacion && getCitasDelDia) {
+        console.log('📅 Cargando citas para el día:', fecha);
+        const citas = await getCitasDelDia(fecha);
+        setCitasDelDia(citas);
+        console.log('✅ Citas encontradas para el día:', citas.length);
+      } else {
+        setCitasDelDia([]);
+      }
+    };
+
+    cargarCitasDia();
+  }, [fecha, selectedAsignacion]);
+
   // Validar disponibilidad del día
   const isDiaDisponible = (fechaSeleccionada: string) => {
     if (!fechaSeleccionada || diasSemana.length === 0) return false;
 
+    // Asegurar que la fecha se interpreta en hora local correctamente
+    // Agregar T00:00:00 para evitar problemas de zona horaria al convertir a Date
     const fecha = new Date(fechaSeleccionada + 'T00:00:00');
     const diaSemanaNumero = fecha.getDay(); // 0=domingo, 1=lunes, 2=martes...
 
@@ -276,7 +295,39 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     const duracionConsulta = diaConfig.duracion_consulta || 30;
     console.log('⏱️ Duración de consulta configurada:', duracionConsulta, 'minutos');
 
-    return generarHorariosDisponibles(diaConfig.hora_inicio, diaConfig.hora_fin, duracionConsulta);
+    // Generar horarios base
+    const horariosBase = generarHorariosDisponibles(diaConfig.hora_inicio, diaConfig.hora_fin, duracionConsulta);
+
+    // Si estamos editando, permitir la hora actual de la cita
+    // Si NO estamos editando, filtrar las horas ocupadas
+    return horariosBase.filter(horaInicio => {
+      // Si es la misma hora de la cita que se está editando, permitirla
+      if (modoEdicion && citaEditar && citaEditar.fecha_cita === fecha && citaEditar.hora_inicio.substring(0, 5) === horaInicio) {
+        return true;
+      }
+
+      const horaFin = calcularHoraFin(horaInicio, duracionConsulta.toString());
+
+      // Verificar si hay conflicto con alguna cita existente
+      const conflicto = citasDelDia.some(cita => {
+        // Ignorar la cita que se está editando
+        if (modoEdicion && citaEditar && cita.id_cita === citaEditar.id_cita) {
+          return false;
+        }
+
+        const citaInicio = cita.hora_inicio.substring(0, 5);
+        const citaFin = cita.hora_fin.substring(0, 5);
+
+        // Lógica de traslape
+        return (
+          (horaInicio >= citaInicio && horaInicio < citaFin) ||
+          (horaFin > citaInicio && horaFin <= citaFin) ||
+          (horaInicio <= citaInicio && horaFin >= citaFin)
+        );
+      });
+
+      return !conflicto;
+    });
   };
 
   const horariosDisponibles = getHorariosDisponibles();
