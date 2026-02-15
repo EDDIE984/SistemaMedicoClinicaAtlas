@@ -1,76 +1,129 @@
-// Hook personalizado para reportes y estadísticas
+// Hook personalizado para reportes y estadísticas (Versión Revertida + Citas Dashboard)
 import { useState, useEffect } from 'react';
 import {
   getEstadisticasGenerales,
   getCitasPorDia,
   getIngresosPorDia,
   getEstadisticasPorMedico,
-  getEstadisticasPorSucursal,
-  getTopPacientes,
-  getDistribucionEstadoPago,
+  getDistribucionAseguradora,
+  getCitasPorEspecialidad,
+  getDistribucionTipoCita,
   getDistribucionFormaPago,
+  getDistribucionEstadoPago,
+  getCitasPorHora,
+  getDuracionPromedioPorTipo,
+  getDistribucionReferencia,
+  getTopPacientes,
+  formatearMoneda,
+  formatearPorcentaje,
+  formatearFechaCorta,
   type EstadisticasGenerales,
   type CitasPorDia,
   type IngresosPorDia,
   type EstadisticasPorMedico,
-  type EstadisticasPorSucursal,
-  type TopPacientes,
+  type TopPaciente,
+  type CitasPorEspecialidad,
+  type DistribucionAseguradora,
+  type DistribucionTipoCita,
+  type DistribucionFormaPago,
   type DistribucionEstadoPago,
-  type DistribucionFormaPago
+  type CitasPorHora,
+  type DuracionPromedio,
+  type DistribucionReferencia
 } from '../lib/reportesService';
 
-export function useReportes(fechaInicio?: string, fechaFin?: string) {
-  const [estadisticasGenerales, setEstadisticasGenerales] = useState<EstadisticasGenerales | null>(null);
+export function useCitasDashboard(fechaInicio: string, fechaFin: string, idSucursal?: number, idEspecialidad?: number) {
+  const [stats, setStats] = useState<EstadisticasGenerales | null>(null);
+  const [citasDia, setCitasDia] = useState<CitasPorDia[]>([]);
+  const [citasEsp, setCitasEsp] = useState<CitasPorEspecialidad[]>([]);
+  const [distAseguradora, setDistAseguradora] = useState<DistribucionAseguradora[]>([]);
+  const [distTipo, setDistTipo] = useState<DistribucionTipoCita[]>([]);
+  const [distFormaPago, setDistFormaPago] = useState<DistribucionFormaPago[]>([]);
+  const [distEstadoPago, setDistEstadoPago] = useState<DistribucionEstadoPago[]>([]);
+  const [citasHora, setCitasHora] = useState<CitasPorHora[]>([]);
+  const [duracionProm, setDuracionProm] = useState<DuracionPromedio[]>([]);
+  const [distReferencia, setDistReferencia] = useState<DistribucionReferencia[]>([]);
+  const [medicos, setMedicos] = useState<EstadisticasPorMedico[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadEstadisticasGenerales();
-  }, [fechaInicio, fechaFin]);
-
-  const loadEstadisticasGenerales = async () => {
+  const loadAll = async () => {
     setIsLoading(true);
-    setError(null);
-
     try {
-      const data = await getEstadisticasGenerales(fechaInicio, fechaFin);
-      setEstadisticasGenerales(data);
-    } catch (err) {
-      setError('Error al cargar estadísticas');
-      console.error(err);
-    }
+      const [s, c, esp, a, t, f, ep, h, d, r, m] = await Promise.all([
+        getEstadisticasGenerales(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad),
+        getCitasPorDia(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad),
+        getCitasPorEspecialidad(idSucursal, fechaInicio, fechaFin),
+        getDistribucionAseguradora(fechaInicio, fechaFin, idSucursal, idEspecialidad),
+        getDistribucionTipoCita(fechaInicio, fechaFin, idSucursal),
+        getDistribucionFormaPago(fechaInicio, fechaFin, idSucursal),
+        getDistribucionEstadoPago(fechaInicio, fechaFin, idSucursal),
+        getCitasPorHora(fechaInicio, fechaFin, idSucursal),
+        getDuracionPromedioPorTipo(fechaInicio, fechaFin, idSucursal),
+        getDistribucionReferencia(fechaInicio, fechaFin, idSucursal),
+        getEstadisticasPorMedico(fechaInicio, fechaFin)
+      ]);
 
+      setStats(s);
+      setCitasDia(c);
+      setCitasEsp(esp);
+      setDistAseguradora(a);
+      setDistTipo(t);
+      setDistFormaPago(f);
+      setDistEstadoPago(ep);
+      setCitasHora(h);
+      setDuracionProm(d);
+      setDistReferencia(r);
+      setMedicos(m);
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+    }
     setIsLoading(false);
   };
 
+  useEffect(() => {
+    loadAll();
+  }, [fechaInicio, fechaFin, idSucursal, idEspecialidad]);
+
   return {
-    estadisticasGenerales,
-    isLoading,
-    error,
-    loadEstadisticasGenerales
+    stats, citasDia, citasEsp, distAseguradora, distTipo,
+    distFormaPago, distEstadoPago, citasHora, duracionProm,
+    distReferencia, medicos, isLoading, loadAll
   };
 }
 
-export function useCitasPorDia(fechaInicio: string, fechaFin: string) {
+export function useReportes(fechaInicio?: string, fechaFin?: string, idSucursal?: number, idMedico?: number) {
+  const [estadisticasGenerales, setEstadisticasGenerales] = useState<EstadisticasGenerales | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadEstadisticasGenerales = async () => {
+    setIsLoading(true);
+    const data = await getEstadisticasGenerales(fechaInicio, fechaFin, idSucursal, idMedico);
+    setEstadisticasGenerales(data);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadEstadisticasGenerales();
+  }, [fechaInicio, fechaFin, idSucursal, idMedico]);
+
+  return { estadisticasGenerales, isLoading, loadEstadisticasGenerales };
+}
+
+export function useCitasPorDia(fechaInicio: string, fechaFin: string, idSucursal?: number, idMedico?: number) {
   const [citasPorDia, setCitasPorDia] = useState<CitasPorDia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadCitasPorDia();
-  }, [fechaInicio, fechaFin]);
+    const load = async () => {
+      setIsLoading(true);
+      const data = await getCitasPorDia(fechaInicio, fechaFin, idSucursal, idMedico);
+      setCitasPorDia(data);
+      setIsLoading(false);
+    };
+    load();
+  }, [fechaInicio, fechaFin, idSucursal, idMedico]);
 
-  const loadCitasPorDia = async () => {
-    setIsLoading(true);
-    const data = await getCitasPorDia(fechaInicio, fechaFin);
-    setCitasPorDia(data);
-    setIsLoading(false);
-  };
-
-  return {
-    citasPorDia,
-    isLoading,
-    loadCitasPorDia
-  };
+  return { citasPorDia, isLoading };
 }
 
 export function useIngresosPorDia(fechaInicio: string, fechaFin: string) {
@@ -78,21 +131,16 @@ export function useIngresosPorDia(fechaInicio: string, fechaFin: string) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadIngresosPorDia();
+    const load = async () => {
+      setIsLoading(true);
+      const data = await getIngresosPorDia(fechaInicio, fechaFin);
+      setIngresosPorDia(data);
+      setIsLoading(false);
+    };
+    load();
   }, [fechaInicio, fechaFin]);
 
-  const loadIngresosPorDia = async () => {
-    setIsLoading(true);
-    const data = await getIngresosPorDia(fechaInicio, fechaFin);
-    setIngresosPorDia(data);
-    setIsLoading(false);
-  };
-
-  return {
-    ingresosPorDia,
-    isLoading,
-    loadIngresosPorDia
-  };
+  return { ingresosPorDia, isLoading };
 }
 
 export function useEstadisticasPorMedico(fechaInicio?: string, fechaFin?: string) {
@@ -100,105 +148,48 @@ export function useEstadisticasPorMedico(fechaInicio?: string, fechaFin?: string
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadEstadisticasPorMedico();
+    const load = async () => {
+      setIsLoading(true);
+      const data = await getEstadisticasPorMedico(fechaInicio, fechaFin);
+      setEstadisticasPorMedico(data);
+      setIsLoading(false);
+    };
+    load();
   }, [fechaInicio, fechaFin]);
 
-  const loadEstadisticasPorMedico = async () => {
-    setIsLoading(true);
-    const data = await getEstadisticasPorMedico(fechaInicio, fechaFin);
-    setEstadisticasPorMedico(data);
-    setIsLoading(false);
-  };
-
-  return {
-    estadisticasPorMedico,
-    isLoading,
-    loadEstadisticasPorMedico
-  };
+  return { estadisticasPorMedico, isLoading };
 }
 
 export function useEstadisticasPorSucursal(fechaInicio?: string, fechaFin?: string) {
-  const [estadisticasPorSucursal, setEstadisticasPorSucursal] = useState<EstadisticasPorSucursal[]>([]);
+  const [estadisticasPorSucursal, setEstadisticasPorSucursal] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  return { estadisticasPorSucursal, isLoading };
+}
+
+export function useTopPacientes(limite: number = 10, ordenarPor: 'citas' | 'gastos' = 'citas', fi?: string, ff?: string) {
+  const [topPacientes, setTopPacientes] = useState<TopPaciente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadEstadisticasPorSucursal();
-  }, [fechaInicio, fechaFin]);
+    const load = async () => {
+      setIsLoading(true);
+      const data = await getTopPacientes(limite, ordenarPor, fi, ff);
+      setTopPacientes(data);
+      setIsLoading(false);
+    };
+    load();
+  }, [limite, ordenarPor, fi, ff]);
 
-  const loadEstadisticasPorSucursal = async () => {
-    setIsLoading(true);
-    const data = await getEstadisticasPorSucursal(fechaInicio, fechaFin);
-    setEstadisticasPorSucursal(data);
-    setIsLoading(false);
-  };
-
-  return {
-    estadisticasPorSucursal,
-    isLoading,
-    loadEstadisticasPorSucursal
-  };
+  return { topPacientes, isLoading };
 }
 
-export function useTopPacientes(
-  limite: number = 10,
-  ordenarPor: 'citas' | 'gastos' = 'citas',
-  fechaInicio?: string,
-  fechaFin?: string
-) {
-  const [topPacientes, setTopPacientes] = useState<TopPacientes[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function useDistribuciones(fi?: string, ff?: string) {
+  const [distribucionEstadoPago, setDistribucionEstadoPago] = useState<any[]>([]);
+  const [distribucionFormaPago, setDistribucionFormaPago] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadTopPacientes();
-  }, [limite, ordenarPor, fechaInicio, fechaFin]);
-
-  const loadTopPacientes = async () => {
-    setIsLoading(true);
-    const data = await getTopPacientes(limite, ordenarPor, fechaInicio, fechaFin);
-    setTopPacientes(data);
-    setIsLoading(false);
-  };
-
-  return {
-    topPacientes,
-    isLoading,
-    loadTopPacientes
-  };
+  return { distribucionEstadoPago, distribucionFormaPago, isLoading };
 }
 
-export function useDistribuciones(fechaInicio?: string, fechaFin?: string) {
-  const [distribucionEstadoPago, setDistribucionEstadoPago] = useState<DistribucionEstadoPago[]>([]);
-  const [distribucionFormaPago, setDistribucionFormaPago] = useState<DistribucionFormaPago[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadDistribuciones();
-  }, [fechaInicio, fechaFin]);
-
-  const loadDistribuciones = async () => {
-    setIsLoading(true);
-    
-    const [estadoPago, formaPago] = await Promise.all([
-      getDistribucionEstadoPago(fechaInicio, fechaFin),
-      getDistribucionFormaPago(fechaInicio, fechaFin)
-    ]);
-
-    setDistribucionEstadoPago(estadoPago);
-    setDistribucionFormaPago(formaPago);
-    setIsLoading(false);
-  };
-
-  return {
-    distribucionEstadoPago,
-    distribucionFormaPago,
-    isLoading,
-    loadDistribuciones
-  };
-}
-
-// Exportar funciones auxiliares
-export {
-  formatearMoneda,
-  formatearPorcentaje,
-  formatearFechaCorta
-} from '../lib/reportesService';
+export { formatearMoneda, formatearPorcentaje, formatearFechaCorta };

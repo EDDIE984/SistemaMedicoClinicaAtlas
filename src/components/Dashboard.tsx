@@ -14,7 +14,8 @@ import {
   Building2,
   MapPin,
   User,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ChatBotView } from './ChatBotView';
@@ -25,6 +26,7 @@ import { AgendaViewSupabase } from './AgendaViewSupabase';
 import { PacientesViewSupabase } from './PacientesViewSupabase';
 import { CargosViewSupabase } from './CargosViewSupabase';
 import { ReportesViewSupabase } from './ReportesViewSupabase';
+import CitasDashboardSupabase from './CitasDashboardSupabase';
 import { ChatAI } from './ChatAI';
 // import logoClinica from "figma:asset/535c4fa3c95ae864b14ba302621119ba18d73bbc.png";
 const logoClinica = 'https://clinicas-atlas.com/wp-content/uploads/2024/11/clinicas-atlas-ecuador.png';
@@ -41,7 +43,7 @@ interface DashboardProps {
   } | null;
 }
 
-type MenuItem = 'pacientes' | 'agenda' | 'cargos' | 'reportes' | 'chatbot' | 'configuraciones';
+type MenuItem = 'pacientes' | 'agenda' | 'citas' | 'cargos' | 'reportes' | 'chatbot' | 'configuraciones';
 
 export function Dashboard({ onLogout, currentUser }: DashboardProps) {
   const [activeItem, setActiveItem] = useState<MenuItem>('agenda');
@@ -56,6 +58,7 @@ export function Dashboard({ onLogout, currentUser }: DashboardProps) {
 
   const allMenuItems = [
     { id: 'agenda' as MenuItem, label: 'Agenda', icon: Calendar },
+    { id: 'citas' as MenuItem, label: 'Citas', icon: BarChart3 },
     { id: 'pacientes' as MenuItem, label: 'Pacientes', icon: Users },
     { id: 'cargos' as MenuItem, label: 'Cobros', icon: Briefcase },
     { id: 'reportes' as MenuItem, label: 'Reportes', icon: FileText },
@@ -65,13 +68,17 @@ export function Dashboard({ onLogout, currentUser }: DashboardProps) {
 
   // Filtrar items del menú según el tipo de usuario
   const menuItems = allMenuItems.filter(item => {
-    // Si es secretaria: solo Agenda y Pacientes
+    // Si es secretaria: solo Agenda, Pacientes y Citas
     if (currentUser?.tipo_usuario === 'secretaria') {
-      return item.id === 'agenda' || item.id === 'pacientes';
+      return item.id === 'agenda' || item.id === 'pacientes' || item.id === 'citas';
     }
     // Si es administrativo, puede ver todo
     if (currentUser?.tipo_usuario === 'administrativo') {
       return true;
+    }
+    // Si es médico o enfermera: solo Agenda, Pacientes y Citas
+    if (currentUser?.tipo_usuario === 'medico' || currentUser?.tipo_usuario === 'enfermera') {
+      return item.id === 'agenda' || item.id === 'pacientes' || item.id === 'citas';
     }
     // Los demás usuarios (médicos, enfermeras) no pueden ver Configuraciones ni ChatBot
     return item.id !== 'configuraciones' && item.id !== 'chatbot';
@@ -109,6 +116,8 @@ export function Dashboard({ onLogout, currentUser }: DashboardProps) {
             }}
           />
         );
+      case 'citas':
+        return <CitasDashboardSupabase currentUser={currentUser} />;
       case 'cargos':
         return <CargosViewSupabase />;
       case 'reportes':
