@@ -10,7 +10,7 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Plus, Pencil, Trash2, Loader2, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
-import { useUsuarioSucursales, useUsuarios, useSucursales } from '../../hooks/useConfiguraciones';
+import { useUsuarioSucursales, useUsuarios, useSucursales, useEspecialidades } from '../../hooks/useConfiguraciones';
 import type { UsuarioSucursal } from '../../lib/configuracionesService';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 
@@ -18,6 +18,7 @@ export function UsuarioSucursalTabSupabase() {
   const { asignaciones, isLoading, agregarAsignacion, actualizarAsignacion, eliminarAsignacion } = useUsuarioSucursales();
   const { usuarios } = useUsuarios();
   const { sucursales } = useSucursales();
+  const { especialidades } = useEspecialidades();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -28,7 +29,8 @@ export function UsuarioSucursalTabSupabase() {
   const [formData, setFormData] = useState({
     id_usuario: 0,
     id_sucursal: 0,
-    especialidad: '',
+    id_especialidad: '', // Changed to string for Select value
+    especialidad: '', // Deprecated
     cargo: '',
     estado: 'activo'
   });
@@ -37,6 +39,7 @@ export function UsuarioSucursalTabSupabase() {
     setFormData({
       id_usuario: usuarios[0]?.id_usuario || 0,
       id_sucursal: sucursales[0]?.id_sucursal || 0,
+      id_especialidad: '',
       especialidad: '',
       cargo: '',
       estado: 'activo'
@@ -50,6 +53,7 @@ export function UsuarioSucursalTabSupabase() {
     setFormData({
       id_usuario: asignacion.id_usuario,
       id_sucursal: asignacion.id_sucursal,
+      id_especialidad: asignacion.id_especialidad?.toString() || '',
       especialidad: asignacion.especialidad || '',
       cargo: asignacion.cargo || '',
       estado: asignacion.estado
@@ -68,7 +72,8 @@ export function UsuarioSucursalTabSupabase() {
     const datos = {
       id_usuario: formData.id_usuario,
       id_sucursal: formData.id_sucursal,
-      especialidad: formData.especialidad.trim() || null,
+      id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+      especialidad: null, // Deprecated
       cargo: formData.cargo.trim() || null,
       estado: formData.estado
     };
@@ -167,7 +172,7 @@ export function UsuarioSucursalTabSupabase() {
                     </TableCell>
                     <TableCell>{asignacion.sucursal?.nombre}</TableCell>
                     <TableCell>{asignacion.sucursal?.compania?.nombre}</TableCell>
-                    <TableCell>{asignacion.especialidad || '-'}</TableCell>
+                    <TableCell>{asignacion.especialidad_data?.nombre || asignacion.especialidad || '-'}</TableCell>
                     <TableCell>{asignacion.cargo || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={asignacion.estado === 'activo' ? 'default' : 'secondary'}>
@@ -207,7 +212,7 @@ export function UsuarioSucursalTabSupabase() {
               <Label>Usuario *</Label>
               <Select
                 value={formData.id_usuario.toString()}
-                onValueChange={(value) => setFormData({ ...formData, id_usuario: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, id_usuario: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -226,7 +231,7 @@ export function UsuarioSucursalTabSupabase() {
               <Label>Sucursal *</Label>
               <Select
                 value={formData.id_sucursal.toString()}
-                onValueChange={(value) => setFormData({ ...formData, id_sucursal: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, id_sucursal: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -243,11 +248,21 @@ export function UsuarioSucursalTabSupabase() {
 
             <div className="space-y-2">
               <Label>Especialidad</Label>
-              <Input
-                value={formData.especialidad}
-                onChange={(e) => setFormData({ ...formData, especialidad: e.target.value })}
-                placeholder="Ej: Pediatría, Medicina General"
-              />
+              <Select
+                value={formData.id_especialidad}
+                onValueChange={(value: string) => setFormData({ ...formData, id_especialidad: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione una especialidad" />
+                </SelectTrigger>
+                <SelectContent>
+                  {especialidades.map((esp) => (
+                    <SelectItem key={esp.id_especialidad} value={esp.id_especialidad.toString()}>
+                      {esp.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -261,7 +276,7 @@ export function UsuarioSucursalTabSupabase() {
 
             <div className="space-y-2">
               <Label>Estado</Label>
-              <Select value={formData.estado} onValueChange={(value) => setFormData({ ...formData, estado: value })}>
+              <Select value={formData.estado} onValueChange={(value: string) => setFormData({ ...formData, estado: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

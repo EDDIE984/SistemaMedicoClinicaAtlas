@@ -19,7 +19,7 @@ export interface Database {
           email: string
           telefono: string | null
           password: string
-          tipo_usuario: 'medico' | 'administrativo' | 'enfermera'
+          tipo_usuario: 'medico' | 'administrativo' | 'enfermera' | 'secretaria'
           fecha_ingreso: string
           estado: 'activo' | 'inactivo'
           created_at: string
@@ -33,7 +33,7 @@ export interface Database {
           email: string
           telefono?: string | null
           password?: string
-          tipo_usuario: 'medico' | 'administrativo' | 'enfermera'
+          tipo_usuario: 'medico' | 'administrativo' | 'enfermera' | 'secretaria'
           fecha_ingreso?: string
           estado?: 'activo' | 'inactivo'
           created_at?: string
@@ -47,13 +47,72 @@ export interface Database {
           email?: string
           telefono?: string | null
           password?: string
-          tipo_usuario?: 'medico' | 'administrativo' | 'enfermera'
+          tipo_usuario?: 'medico' | 'administrativo' | 'enfermera' | 'secretaria'
           fecha_ingreso?: string
           estado?: 'activo' | 'inactivo'
           created_at?: string
           updated_at?: string
         }
-      }
+      },
+      compania: {
+        Row: {
+          id_compania: number
+          nombre: string
+          direccion: string | null
+          telefono: string | null
+          email: string | null
+          logo_url: string | null
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_compania?: number
+          nombre: string
+          direccion?: string | null
+          telefono?: string | null
+          email?: string | null
+          logo_url?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_compania?: number
+          nombre?: string
+          direccion?: string | null
+          telefono?: string | null
+          email?: string | null
+          logo_url?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+      },
+      aseguradora: {
+        Row: {
+          id_aseguradora: number
+          nombre: string
+          estado: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_aseguradora?: number
+          nombre: string
+          estado?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_aseguradora?: number
+          nombre?: string
+          estado?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      },
       paciente: {
         Row: {
           id_paciente: number
@@ -106,14 +165,54 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
-      }
+      },
+      historial_estado_cita: {
+        Row: {
+          id_historial: number
+          id_cita: number
+          estado_anterior: string
+          estado_nuevo: string
+          id_usuario_cambio: number
+          observaciones: string | null
+          created_at: string
+        }
+        Insert: {
+          id_historial?: number
+          id_cita: number
+          estado_anterior: string
+          estado_nuevo: string
+          id_usuario_cambio: number
+          observaciones?: string | null
+          created_at?: string
+        }
+        Update: {
+          id_historial?: number
+          id_cita?: number
+          estado_anterior?: string
+          estado_nuevo?: string
+          id_usuario_cambio?: number
+          observaciones?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historial_estado_cita_id_cita_fkey"
+            columns: ["id_cita"]
+            isOneToOne: false
+            referencedRelation: "cita"
+            referencedColumns: ["id_cita"]
+          }
+        ]
+      },
       cita: {
         Row: {
           id_cita: number
           id_paciente: number
+          id_especialidad: number
           id_usuario_sucursal: number
           id_sucursal: number
           id_consultorio: number | null
+          id_aseguradora: number | null
           fecha_cita: string
           hora_inicio: string
           hora_fin: string
@@ -125,15 +224,18 @@ export interface Database {
           forma_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | null
           estado_pago: 'pendiente' | 'pagado' | 'parcial'
           notas_cita: string | null
+          referencia: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id_cita?: number
           id_paciente: number
+          id_especialidad: number
           id_usuario_sucursal: number
           id_sucursal: number
           id_consultorio?: number | null
+          id_aseguradora?: number | null
           fecha_cita: string
           hora_inicio: string
           hora_fin: string
@@ -145,15 +247,18 @@ export interface Database {
           forma_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | null
           estado_pago: 'pendiente' | 'pagado' | 'parcial'
           notas_cita?: string | null
+          referencia?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id_cita?: number
           id_paciente?: number
+          id_especialidad?: number
           id_usuario_sucursal?: number
           id_sucursal?: number
           id_consultorio?: number | null
+          id_aseguradora?: number | null
           fecha_cita?: string
           hora_inicio?: string
           hora_fin?: string
@@ -165,10 +270,11 @@ export interface Database {
           forma_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro' | null
           estado_pago?: 'pendiente' | 'pagado' | 'parcial'
           notas_cita?: string | null
+          referencia?: string | null
           created_at?: string
           updated_at?: string
         }
-      }
+      },
       sucursal: {
         Row: {
           id_sucursal: number
@@ -203,12 +309,13 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
-      }
+      },
       usuario_sucursal: {
         Row: {
           id_usuario_sucursal: number
           id_usuario: number
           id_sucursal: number
+          id_especialidad: number | null
           especialidad: string | null
           estado: 'activo' | 'inactivo'
           created_at: string
@@ -218,6 +325,7 @@ export interface Database {
           id_usuario_sucursal?: number
           id_usuario: number
           id_sucursal: number
+          id_especialidad: number | null
           especialidad?: string | null
           estado?: 'activo' | 'inactivo'
           created_at?: string
@@ -227,12 +335,13 @@ export interface Database {
           id_usuario_sucursal?: number
           id_usuario?: number
           id_sucursal?: number
+          id_especialidad?: number | null
           especialidad?: string | null
           estado?: 'activo' | 'inactivo'
           created_at?: string
           updated_at?: string
         }
-      }
+      },
       precio_usuario_sucursal: {
         Row: {
           id_precio_usuario_sucursal: number
@@ -258,7 +367,7 @@ export interface Database {
           estado?: 'activo' | 'inactivo'
           created_at?: string
         }
-      }
+      },
       signo_vital: {
         Row: {
           id_signo_vital: number
@@ -308,7 +417,7 @@ export interface Database {
           notas?: string | null
           created_at?: string
         }
-      }
+      },
       archivo_medico: {
         Row: {
           id_archivo: number
@@ -339,6 +448,143 @@ export interface Database {
           url_archivo?: string | null
           fecha_carga?: string
           created_at?: string
+        }
+      },
+      especialidad: {
+        Row: {
+          id_especialidad: number
+          nombre: string
+          descripcion: string | null
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_especialidad?: number
+          nombre: string
+          descripcion?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_especialidad?: number
+          nombre?: string
+          descripcion?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+      },
+      consultorio: {
+        Row: {
+          id_consultorio: number
+          id_sucursal: number
+          nombre: string
+          piso: string | null
+          numero: string | null
+          capacidad: number | null
+          equipamiento: string | null
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_consultorio?: number
+          id_sucursal: number
+          nombre: string
+          piso?: string | null
+          numero?: string | null
+          capacidad?: number | null
+          equipamiento?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_consultorio?: number
+          id_sucursal?: number
+          nombre?: string
+          piso?: string | null
+          numero?: string | null
+          capacidad?: number | null
+          equipamiento?: string | null
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+      },
+      precio_base_especialidad: {
+        Row: {
+          id_precio_base: number
+          id_compania: number
+          especialidad: string
+          precio_consulta: number
+          precio_control: number
+          precio_emergencia: number
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_precio_base?: number
+          id_compania: number
+          especialidad: string
+          precio_consulta: number
+          precio_control: number
+          precio_emergencia: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_precio_base?: number
+          id_compania?: number
+          especialidad?: string
+          precio_consulta?: number
+          precio_control?: number
+          precio_emergencia?: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+      },
+      asignacion_consultorio: {
+        Row: {
+          id_asignacion: number
+          id_usuario_sucursal: number
+          id_consultorio: number
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          duracion_consulta: number
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_asignacion?: number
+          id_usuario_sucursal: number
+          id_consultorio: number
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          duracion_consulta: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_asignacion?: number
+          id_usuario_sucursal?: number
+          id_consultorio?: number
+          dia_semana?: number
+          hora_inicio?: string
+          hora_fin?: string
+          duracion_consulta?: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
         }
       }
       // Agregar otras tablas según necesites

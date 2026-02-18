@@ -167,8 +167,9 @@ export async function searchPacientesByCompania(query: string, idCompania: numbe
       return [];
     }
 
-    console.log(`✅ Se encontraron ${data?.length || 0} pacientes de la compañía ${idCompania}`);
-    return data || [];
+    if (!data) return [];
+    console.log(`✅ Se encontraron ${data.length} pacientes de la compañía ${idCompania}`);
+    return data;
   } catch (error) {
     console.error('❌ Error inesperado al buscar pacientes:', error);
     return [];
@@ -183,7 +184,7 @@ export async function getPacienteById(id_paciente: number): Promise<Paciente | n
     console.log('🔍 Obteniendo paciente ID:', id_paciente);
 
     const { data, error } = await supabaseAdmin
-      .from('paciente')
+      .from('paciente' as any)
       .select('*')
       .eq('id_paciente', id_paciente)
       .maybeSingle(); // Cambiado de .single() a .maybeSingle()
@@ -193,8 +194,14 @@ export async function getPacienteById(id_paciente: number): Promise<Paciente | n
       return null;
     }
 
-    console.log('✅ Paciente encontrado:', data.nombres, data.apellidos);
-    return data;
+    if (!data) {
+      console.log('ℹ️ No se encontró el paciente con ID:', id_paciente);
+      return null;
+    }
+
+    const p = data as Paciente;
+    console.log('✅ Paciente encontrado:', p.nombres, p.apellidos);
+    return p;
   } catch (error) {
     console.error('❌ Error inesperado al obtener paciente:', error);
     return null;
@@ -213,12 +220,12 @@ export async function getPacienteByCedula(cedula: string, id_compania?: number):
       .select('*')
       .eq('cedula', cedula)
       .eq('estado', 'activo');
-    
+
     // Si se proporciona id_compania, filtrar por compañía
     if (id_compania) {
       query = query.eq('id_compania', id_compania);
     }
-    
+
     const { data, error } = await query.maybeSingle();
 
     if (error) {
@@ -231,8 +238,8 @@ export async function getPacienteByCedula(cedula: string, id_compania?: number):
     } else {
       console.log('ℹ️ No se encontró paciente con cédula:', cedula);
     }
-    
-    return data;
+
+    return data as Paciente | null;
   } catch (error) {
     console.error('❌ Error inesperado al buscar paciente por cédula:', error);
     return null;
@@ -246,8 +253,8 @@ export async function createPaciente(paciente: Omit<Paciente, 'id_paciente' | 'c
   try {
     console.log('➕ Creando nuevo paciente:', paciente.nombres, paciente.apellidos);
 
-    const { data, error } = await supabaseAdmin
-      .from('paciente')
+    const { data, error } = await (supabaseAdmin
+      .from('paciente') as any)
       .insert({
         ...paciente,
         estado: 'activo'
@@ -257,12 +264,12 @@ export async function createPaciente(paciente: Omit<Paciente, 'id_paciente' | 'c
 
     if (error) {
       console.error('❌ Error al crear paciente:', error);
-      
+
       // Si es error de cédula duplicada, retornar null con mensaje específico
       if (error.code === '23505' && error.message.includes('cedula')) {
         throw new Error('CEDULA_DUPLICADA');
       }
-      
+
       return null;
     }
 
@@ -270,12 +277,12 @@ export async function createPaciente(paciente: Omit<Paciente, 'id_paciente' | 'c
     return data;
   } catch (error) {
     console.error('❌ Error inesperado al crear paciente:', error);
-    
+
     // Re-lanzar error de cédula duplicada
     if (error instanceof Error && error.message === 'CEDULA_DUPLICADA') {
       throw error;
     }
-    
+
     return null;
   }
 }
@@ -287,9 +294,9 @@ export async function updatePaciente(id_paciente: number, updates: Partial<Pacie
   try {
     console.log('✏️ Actualizando paciente ID:', id_paciente);
 
-    const { error } = await supabaseAdmin
-      .from('paciente')
-      .update(updates)
+    const { error } = await (supabaseAdmin
+      .from('paciente') as any)
+      .update(updates as any)
       .eq('id_paciente', id_paciente);
 
     if (error) {
@@ -312,9 +319,9 @@ export async function deletePaciente(id_paciente: number): Promise<boolean> {
   try {
     console.log('🗑️ Desactivando paciente ID:', id_paciente);
 
-    const { error } = await supabaseAdmin
-      .from('paciente')
-      .update({ estado: 'inactivo' })
+    const { error } = await (supabaseAdmin
+      .from('paciente') as any)
+      .update({ estado: 'inactivo' } as any)
       .eq('id_paciente', id_paciente);
 
     if (error) {
@@ -342,7 +349,7 @@ export async function getSignosVitalesByPaciente(id_paciente: number): Promise<S
     console.log('🔍 Obteniendo signos vitales del paciente:', id_paciente);
 
     const { data, error } = await supabaseAdmin
-      .from('signo_vital')
+      .from('signo_vital' as any)
       .select('*')
       .eq('id_paciente', id_paciente)
       .order('fecha_registro', { ascending: false });
@@ -384,8 +391,8 @@ export async function createSignoVital(signo: Omit<SignoVital, 'id_signo_vital' 
 
     console.log('📊 Datos limpiados:', JSON.stringify(signoLimpio, null, 2));
 
-    const { data, error } = await supabaseAdmin
-      .from('signo_vital')
+    const { data, error } = await (supabaseAdmin
+      .from('signo_vital') as any)
       .insert(signoLimpio)
       .select()
       .single();
@@ -410,9 +417,9 @@ export async function updateSignoVital(id_signo_vital: number, updates: Partial<
   try {
     console.log('✏️ Actualizando signos vitales ID:', id_signo_vital);
 
-    const { error } = await supabaseAdmin
-      .from('signo_vital')
-      .update(updates)
+    const { error } = await (supabaseAdmin
+      .from('signo_vital') as any)
+      .update(updates as any)
       .eq('id_signo_vital', id_signo_vital);
 
     if (error) {
@@ -469,10 +476,10 @@ function guardarAntecedentesStorage(storage: AntecedentesStorage): void {
 export async function getAntecedentesByPaciente(id_paciente: number): Promise<any> {
   try {
     console.log('🔍 Obteniendo antecedentes del paciente:', id_paciente);
-    
+
     const storage = cargarAntecedentesStorage();
     const antecedentes = storage[id_paciente] || {};
-    
+
     console.log(`✅ Antecedentes cargados para paciente ${id_paciente}`);
     return antecedentes;
   } catch (error) {
@@ -487,22 +494,22 @@ export async function getAntecedentesByPaciente(id_paciente: number): Promise<an
 export async function saveAntecedente(id_paciente: number, tipo: string, datos: any): Promise<boolean> {
   try {
     console.log('💾 Guardando antecedente:', { id_paciente, tipo });
-    
+
     const storage = cargarAntecedentesStorage();
-    
+
     // Obtener antecedentes actuales del paciente
     const antecedentesActuales = storage[id_paciente] || {};
-    
+
     // Actualizar con los nuevos datos
     storage[id_paciente] = {
       ...antecedentesActuales,
       [tipo]: datos,
       updated_at: new Date().toISOString()
     };
-    
+
     // Guardar en localStorage
     guardarAntecedentesStorage(storage);
-    
+
     console.log('✅ Antecedente guardado exitosamente');
     return true;
   } catch (error) {
@@ -520,7 +527,7 @@ export async function createAntecedente(antecedente: Omit<Antecedente, 'id_antec
     antecedente.tipo_antecedente,
     JSON.parse(antecedente.descripcion)
   );
-  
+
   if (success) {
     return {
       id_antecedente: Date.now(),
@@ -554,7 +561,7 @@ export async function getArchivosByPaciente(id_paciente: number): Promise<Archiv
     console.log('🔍 Obteniendo archivos del paciente:', id_paciente);
 
     const { data, error } = await supabaseAdmin
-      .from('archivo_medico')
+      .from('archivo_medico' as any)
       .select('*')
       .eq('id_paciente', id_paciente)
       .order('fecha_carga', { ascending: false });
@@ -579,8 +586,8 @@ export async function createArchivoMedico(archivo: Omit<ArchivoMedico, 'id_archi
   try {
     console.log('➕ Creando nuevo archivo para paciente:', archivo.id_paciente);
 
-    const { data, error } = await supabaseAdmin
-      .from('archivo_medico')
+    const { data, error } = await (supabaseAdmin
+      .from('archivo_medico') as any)
       .insert(archivo)
       .select()
       .single();
@@ -634,10 +641,10 @@ export function calcularIMC(peso_kg: number | null, estatura_cm: number | null):
   if (!peso_kg || !estatura_cm || estatura_cm === 0) {
     return null;
   }
-  
+
   const estaturaMetros = estatura_cm / 100;
   const imc = peso_kg / (estaturaMetros * estaturaMetros);
-  
+
   // Limitar a 999.99 para cumplir con NUMERIC(5,2)
   const imcRedondeado = Math.round(imc * 100) / 100;
   return Math.min(999.99, imcRedondeado);
@@ -649,14 +656,14 @@ export function calcularIMC(peso_kg: number | null, estatura_cm: number | null):
 export function calcularEdad(fechaNacimiento: string): number {
   const hoy = new Date();
   const nacimiento = new Date(fechaNacimiento);
-  
+
   let edad = hoy.getFullYear() - nacimiento.getFullYear();
   const mes = hoy.getMonth() - nacimiento.getMonth();
-  
+
   if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
     edad--;
   }
-  
+
   return edad;
 }
 

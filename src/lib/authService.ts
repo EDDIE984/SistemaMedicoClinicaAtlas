@@ -20,6 +20,7 @@ export interface AsignacionCompleta {
   id_usuario_sucursal: number;
   id_usuario: number;
   id_sucursal: number;
+  id_especialidad: number | null;
   especialidad: string;
   estado: 'activo' | 'inactivo';
   usuario?: {
@@ -66,6 +67,7 @@ interface AsignacionSupabase {
   id_usuario: number;
   id_sucursal: number;
   especialidad: string | null;
+  id_especialidad: number | null;
   activo: boolean;
   sucursal: {
     id_sucursal: number;
@@ -89,13 +91,12 @@ interface AsignacionSupabase {
  */
 export async function getUsuarioByEmail(email: string): Promise<Usuario | null> {
   try {
-
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('usuario')
       .select('*')
       .eq('email', email)
       .eq('estado', 'activo')
-      .maybeSingle();
+      .maybeSingle() as any);
 
     if (error) {
       return null;
@@ -105,7 +106,6 @@ export async function getUsuarioByEmail(email: string): Promise<Usuario | null> 
       console.log('❌ Usuario no encontrado');
       return null;
     }
-
 
     // Convertir a formato esperado por la aplicación
     const usuario: Usuario = {
@@ -137,12 +137,13 @@ export async function getAsignacionesCompletasByUsuario(
   try {
     console.log('🔍 Buscando asignaciones para usuario ID:', id_usuario);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('usuario_sucursal')
       .select(`
         id_usuario_sucursal,
         id_usuario,
         id_sucursal,
+        id_especialidad,
         especialidad,
         estado,
         sucursal:sucursal!inner (
@@ -162,7 +163,7 @@ export async function getAsignacionesCompletasByUsuario(
         )
       `)
       .eq('id_usuario', id_usuario)
-      .eq('estado', 'activo');
+      .eq('estado', 'activo') as any);
 
     if (error) {
       console.error('❌ Error al buscar asignaciones:', error);
@@ -181,6 +182,7 @@ export async function getAsignacionesCompletasByUsuario(
       id_usuario_sucursal: asig.id_usuario_sucursal,
       id_usuario: asig.id_usuario,
       id_sucursal: asig.id_sucursal,
+      id_especialidad: asig.id_especialidad,
       especialidad: asig.especialidad || 'Sin especialidad',
       estado: asig.estado,
       sucursal: {
@@ -253,12 +255,12 @@ export async function getSucursalesByCompania(id_compania: number) {
   try {
     console.log('🔍 Buscando sucursales para compañía ID:', id_compania);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('sucursal')
       .select('*')
       .eq('id_compania', id_compania)
       .eq('estado', 'activo')
-      .order('nombre');
+      .order('nombre') as any);
 
     if (error) {
       console.error('❌ Error al buscar sucursales:', error);
@@ -280,12 +282,13 @@ export async function getMedicosBySucursal(id_sucursal: number): Promise<Asignac
   try {
     console.log('🔍 Buscando médicos para sucursal ID:', id_sucursal);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('usuario_sucursal')
       .select(`
         id_usuario_sucursal,
         id_usuario,
         id_sucursal,
+        id_especialidad,
         especialidad,
         estado,
         usuario:usuario!inner (
@@ -317,7 +320,7 @@ export async function getMedicosBySucursal(id_sucursal: number): Promise<Asignac
       .eq('id_sucursal', id_sucursal)
       .eq('estado', 'activo')
       .eq('usuario.tipo_usuario', 'medico')
-      .eq('usuario.estado', 'activo');
+      .eq('usuario.estado', 'activo') as any);
 
     if (error) {
       console.error('❌ Error al buscar médicos:', error);
@@ -336,6 +339,7 @@ export async function getMedicosBySucursal(id_sucursal: number): Promise<Asignac
       id_usuario_sucursal: asig.id_usuario_sucursal,
       id_usuario: asig.id_usuario,
       id_sucursal: asig.id_sucursal,
+      id_especialidad: asig.id_especialidad,
       especialidad: asig.especialidad || 'Sin especialidad',
       estado: asig.estado,
       usuario: {

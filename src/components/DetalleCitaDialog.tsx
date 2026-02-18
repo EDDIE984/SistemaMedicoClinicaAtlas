@@ -1,7 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Phone, Mail, Calendar, Clock, MapPin, Stethoscope, XCircle } from 'lucide-react';
+import { Phone, Mail, Calendar, Clock, MapPin, Stethoscope, XCircle, Minimize2, Maximize2, X } from 'lucide-react';
 import type { CitaCompleta } from '../lib/citasService';
 import { calcularEdad } from '../lib/pacientesService';
 
@@ -22,112 +23,170 @@ export function DetalleCitaDialog({
     onModificar,
     onCancelar
 }: DetalleCitaDialogProps) {
+    const [windowState, setWindowState] = useState<'normal' | 'minimized'>('normal');
+
+    useEffect(() => {
+        if (isOpen && windowState === 'minimized') {
+            // Keep it minimized if it was already minimized
+        } else if (!isOpen) {
+            setWindowState('normal');
+        }
+    }, [isOpen]);
+
     if (!cita) return null;
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-80 p-4 gap-0">
-                <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-start justify-between pb-3 border-b">
-                        <div>
-                            <h3 className="font-semibold text-sm">
-                                {cita.paciente.nombres} {cita.paciente.apellidos}
-                            </h3>
-                            <p className="text-xs text-gray-500">
-                                {cita.paciente.fecha_nacimiento && `${calcularEdad(cita.paciente.fecha_nacimiento)} años`}
-                            </p>
+        <>
+            <Dialog open={isOpen && windowState !== 'minimized'} onOpenChange={onClose}>
+                <DialogContent className="w-80 p-4 gap-0 max-h-[90vh] overflow-y-auto">
+                    <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-start justify-between pb-3 border-b relative">
+                            <div className="absolute left-0 top-0">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 hover:bg-gray-100"
+                                    onClick={() => setWindowState('minimized')}
+                                    title="Minimizar"
+                                >
+                                    <Minimize2 className="h-3 w-3 text-gray-500" />
+                                </Button>
+                            </div>
+                            <div className="pl-8">
+                                <h3 className="font-semibold text-sm">
+                                    {cita.paciente.nombres} {cita.paciente.apellidos}
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                    {cita.paciente.fecha_nacimiento && `${calcularEdad(cita.paciente.fecha_nacimiento)} años`}
+                                </p>
+                            </div>
+                            <Badge
+                                variant={cita.estado_cita === 'cancelada' ? 'destructive' : cita.consulta_realizada ? 'default' : 'secondary'}
+                                className="text-xs"
+                            >
+                                {cita.estado_cita === 'cancelada' ? 'Cancelada' : cita.consulta_realizada ? 'Completada' : 'Programada'}
+                            </Badge>
                         </div>
-                        <Badge
-                            variant={cita.estado_cita === 'cancelada' ? 'destructive' : cita.consulta_realizada ? 'default' : 'secondary'}
-                            className="text-xs"
-                        >
-                            {cita.estado_cita === 'cancelada' ? 'Cancelada' : cita.consulta_realizada ? 'Completada' : 'Programada'}
-                        </Badge>
-                    </div>
 
-                    {/* Información de contacto */}
-                    <div className="space-y-2 text-xs">
-                        {cita.paciente.telefono && (
+                        {/* Información de contacto */}
+                        <div className="space-y-2 text-xs">
+                            {cita.paciente.telefono && (
+                                <div className="flex items-center gap-2 text-gray-600">
+                                    <Phone className="size-3" />
+                                    <span>{cita.paciente.telefono}</span>
+                                </div>
+                            )}
+                            {cita.paciente.email && (
+                                <div className="flex items-center gap-2 text-gray-600">
+                                    <Mail className="size-3" />
+                                    <span className="truncate">{cita.paciente.email}</span>
+                                </div>
+                            )}
                             <div className="flex items-center gap-2 text-gray-600">
-                                <Phone className="size-3" />
-                                <span>{cita.paciente.telefono}</span>
+                                <Calendar className="size-3" />
+                                <span>
+                                    {new Date(cita.fecha_cita).toLocaleDateString('es-ES', {
+                                        weekday: 'long',
+                                        day: 'numeric',
+                                        month: 'long'
+                                    })}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-600">
+                                <Clock className="size-3" />
+                                <span>{cita.hora_inicio.substring(0, 5)} - {cita.hora_fin.substring(0, 5)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-600">
+                                <MapPin className="size-3" />
+                                <span>{cita.usuario_sucursal.sucursal.nombre}</span>
+                            </div>
+                        </div>
+
+                        {/* Motivo de consulta */}
+                        {cita.motivo_consulta && (
+                            <div className="pt-2 border-t">
+                                <p className="text-xs font-medium text-gray-700 mb-1">Motivo de consulta:</p>
+                                <p className="text-xs text-gray-600">{cita.motivo_consulta}</p>
                             </div>
                         )}
-                        {cita.paciente.email && (
-                            <div className="flex items-center gap-2 text-gray-600">
-                                <Mail className="size-3" />
-                                <span className="truncate">{cita.paciente.email}</span>
+
+                        {/* Botones de acción */}
+                        {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && (
+                            <div className="space-y-2 pt-3 border-t">
+                                <Button
+                                    size="sm"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 h-8 text-xs"
+                                    onClick={() => {
+                                        onClose();
+                                        onIniciarConsulta(cita);
+                                    }}
+                                >
+                                    <Stethoscope className="size-3 mr-1" />
+                                    Iniciar cita
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="w-full bg-gray-600 hover:bg-gray-700 text-white h-8 text-xs"
+                                    onClick={() => {
+                                        onClose();
+                                        onModificar(cita);
+                                    }}
+                                >
+                                    <Calendar className="size-3 mr-1" />
+                                    Modificar cita
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="w-full bg-red-600 hover:bg-red-700 text-white h-8 text-xs"
+                                    onClick={() => {
+                                        onClose();
+                                        onCancelar(cita);
+                                    }}
+                                >
+                                    <XCircle className="size-3 mr-1" />
+                                    Cancelar cita
+                                </Button>
                             </div>
                         )}
-                        <div className="flex items-center gap-2 text-gray-600">
-                            <Calendar className="size-3" />
-                            <span>
-                                {new Date(cita.fecha_cita).toLocaleDateString('es-ES', {
-                                    weekday: 'long',
-                                    day: 'numeric',
-                                    month: 'long'
-                                })}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {isOpen && windowState === 'minimized' && (
+                <div
+                    className="fixed bottom-4 left-4 z-[100] w-72 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden animate-in slide-in-from-bottom-2 duration-300"
+                >
+                    <div className="bg-blue-600 px-3 py-2 flex items-center justify-between text-white">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                            <Stethoscope className="size-4 shrink-0" />
+                            <span className="text-xs font-medium truncate">
+                                Detalle: {cita.paciente.nombres} {cita.paciente.apellidos}
                             </span>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-600">
-                            <Clock className="size-3" />
-                            <span>{cita.hora_inicio.substring(0, 5)} - {cita.hora_fin.substring(0, 5)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-600">
-                            <MapPin className="size-3" />
-                            <span>{cita.usuario_sucursal.sucursal.nombre}</span>
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 hover:bg-white/20 text-white p-0 border-none"
+                                onClick={() => setWindowState('normal')}
+                                title="Restaurar"
+                            >
+                                <Maximize2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 hover:bg-white/20 text-white p-0 border-none"
+                                onClick={onClose}
+                                title="Cerrar"
+                            >
+                                <X className="h-3 w-3" />
+                            </Button>
                         </div>
                     </div>
-
-                    {/* Motivo de consulta */}
-                    {cita.motivo_consulta && (
-                        <div className="pt-2 border-t">
-                            <p className="text-xs font-medium text-gray-700 mb-1">Motivo de consulta:</p>
-                            <p className="text-xs text-gray-600">{cita.motivo_consulta}</p>
-                        </div>
-                    )}
-
-                    {/* Botones de acción */}
-                    {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && (
-                        <div className="space-y-2 pt-3 border-t">
-                            <Button
-                                size="sm"
-                                className="w-full bg-blue-600 hover:bg-blue-700 h-8 text-xs"
-                                onClick={() => {
-                                    onClose();
-                                    onIniciarConsulta(cita);
-                                }}
-                            >
-                                <Stethoscope className="size-3 mr-1" />
-                                Iniciar cita
-                            </Button>
-                            <Button
-                                size="sm"
-                                className="w-full bg-gray-600 hover:bg-gray-700 text-white h-8 text-xs"
-                                onClick={() => {
-                                    onClose();
-                                    onModificar(cita);
-                                }}
-                            >
-                                <Calendar className="size-3 mr-1" />
-                                Modificar cita
-                            </Button>
-                            <Button
-                                size="sm"
-                                className="w-full bg-red-600 hover:bg-red-700 text-white h-8 text-xs"
-                                onClick={() => {
-                                    onClose();
-                                    onCancelar(cita);
-                                }}
-                            >
-                                <XCircle className="size-3 mr-1" />
-                                Cancelar cita
-                            </Button>
-                        </div>
-                    )}
                 </div>
-            </DialogContent>
-        </Dialog>
+            )}
+        </>
     );
 }

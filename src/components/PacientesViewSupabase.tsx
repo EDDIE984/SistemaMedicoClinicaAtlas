@@ -34,7 +34,8 @@ import {
   FileText,
   Calendar,
   Loader2,
-  Clock
+  Clock,
+  Pencil
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -108,7 +109,7 @@ export function PacientesViewSupabase({
     }
   }, [currentUser]);
 
-  const { pacientes, isLoading, buscarPacientes, crearPaciente, clearPacientes } = usePacientes(idCompania || undefined, { initialLoad: false });
+  const { pacientes, isLoading, buscarPacientes, crearPaciente, actualizarPaciente, clearPacientes } = usePacientes(idCompania || undefined, { initialLoad: false });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
@@ -119,6 +120,7 @@ export function PacientesViewSupabase({
   const [isSavingConsulta, setIsSavingConsulta] = useState(false);
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isSearchingCedula, setIsSearchingCedula] = useState(false); // Estado para loading de cédula
+  const [isEditingPatient, setIsEditingPatient] = useState(false); // Estado para edición
 
 
   // Estado para citas del paciente seleccionado
@@ -392,10 +394,43 @@ export function PacientesViewSupabase({
     }
   };
 
+  // Preparar edición de paciente
+  const handleEditPatient = (paciente: Paciente) => {
+    setNewPatient({
+      nombres: paciente.nombres,
+      apellidos: paciente.apellidos,
+      fecha_nacimiento: paciente.fecha_nacimiento || '',
+      sexo: paciente.sexo,
+      cedula: paciente.cedula,
+      email: paciente.email || '',
+      telefono: paciente.telefono || '',
+      direccion: paciente.direccion || '',
+    });
+    setIsEditingPatient(true);
+    setIsNewPatientDialogOpen(true);
+  };
+
+
   // Crear nuevo paciente
   const handleCreatePatient = async () => {
-    if (!newPatient.nombres || !newPatient.apellidos || !newPatient.cedula) {
-      toast.error('Por favor complete los campos obligatorios');
+    // Validar todos los campos obligatorios
+    const { nombres, apellidos, cedula, fecha_nacimiento, email, telefono, direccion } = newPatient;
+    if (!nombres || !apellidos || !cedula || !fecha_nacimiento || !email || !telefono || !direccion) {
+      toast.error('Todos los campos son obligatorios');
+      return;
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error('Por favor ingrese un correo electrónico válido');
+      return;
+    }
+
+    // Validar formato de teléfono (+5939XXXXXXXX)
+    const phoneRegex = /^\+5939\d{8}$/;
+    if (!phoneRegex.test(telefono)) {
+      toast.error('El teléfono debe tener el formato +5939XXXXXXXX (13 caracteres)');
       return;
     }
 
@@ -405,31 +440,48 @@ export function PacientesViewSupabase({
     }
 
     try {
-      const nuevoPaciente = await crearPaciente({
-        ...newPatient,
-        id_compania: idCompania,
-        email: newPatient.email || null,
-        telefono: newPatient.telefono || null,
-        direccion: newPatient.direccion || null,
-        fecha_registro: new Date().toISOString().split('T')[0],
-        estado: 'activo'
-      });
-
-      if (nuevoPaciente) {
-        toast.success('Paciente creado exitosamente');
-        setIsNewPatientDialogOpen(false);
-        setNewPatient({
-          nombres: '',
-          apellidos: '',
-          fecha_nacimiento: '',
-          sexo: 'M',
-          cedula: '',
-          email: '',
-          telefono: '',
-          direccion: '',
+      if (isEditingPatient && selectedPatientId) {
+        const success = await actualizarPaciente(selectedPatientId, {
+          ...newPatient,
+          email: newPatient.email || null,
+          telefono: newPatient.telefono || null,
+          direccion: newPatient.direccion || null,
         });
+
+        if (success) {
+          toast.success('Paciente actualizado exitosamente');
+          setIsNewPatientDialogOpen(false);
+          setIsEditingPatient(false);
+        } else {
+          toast.error('Error al actualizar paciente');
+        }
       } else {
-        toast.error('Error al crear paciente');
+        const nuevoPaciente = await crearPaciente({
+          ...newPatient,
+          id_compania: idCompania,
+          email: newPatient.email || null,
+          telefono: newPatient.telefono || null,
+          direccion: newPatient.direccion || null,
+          fecha_registro: new Date().toISOString().split('T')[0],
+          estado: 'activo'
+        });
+
+        if (nuevoPaciente) {
+          toast.success('Paciente creado exitosamente');
+          setIsNewPatientDialogOpen(false);
+          setNewPatient({
+            nombres: '',
+            apellidos: '',
+            fecha_nacimiento: '',
+            sexo: 'M',
+            cedula: '',
+            email: '',
+            telefono: '',
+            direccion: '',
+          });
+        } else {
+          toast.error('Error al crear paciente');
+        }
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'CEDULA_DUPLICADA') {
@@ -839,7 +891,20 @@ export function PacientesViewSupabase({
         </Button>
 
         <Button
-          onClick={() => setIsNewPatientDialogOpen(true)}
+          onClick={() => {
+            setIsEditingPatient(false);
+            setNewPatient({
+              nombres: '',
+              apellidos: '',
+              fecha_nacimiento: '',
+              sexo: 'M',
+              cedula: '',
+              email: '',
+              telefono: '',
+              direccion: '',
+            });
+            setIsNewPatientDialogOpen(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700 h-12 px-6"
         >
           <Plus className="size-5 mr-2" />
@@ -862,9 +927,19 @@ export function PacientesViewSupabase({
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg truncate">
-                        {pacienteSeleccionado.nombres} {pacienteSeleccionado.apellidos}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-lg truncate">
+                          {pacienteSeleccionado.nombres} {pacienteSeleccionado.apellidos}
+                        </h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => handleEditPatient(pacienteSeleccionado)}
+                        >
+                          <Pencil className="size-4 text-gray-400 hover:text-blue-600" />
+                        </Button>
+                      </div>
                       <p className="text-sm text-gray-500">
                         {calcularEdad(pacienteSeleccionado.fecha_nacimiento)} años • {formatearSexo(pacienteSeleccionado.sexo)}
                       </p>
@@ -1222,15 +1297,16 @@ export function PacientesViewSupabase({
 
           <div className="flex gap-2 my-2">
             <Input
-              placeholder="Ej: Juan Perez o 1712345678"
+              placeholder="Ej: JUAN PEREZ o 1712345678"
               value={searchTerm}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value.toUpperCase())}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === 'Enter') {
                   buscarPacientes(searchTerm);
                 }
               }}
               autoFocus
+              className="uppercase"
             />
             <Button onClick={() => buscarPacientes(searchTerm)} disabled={isLoading}>
               {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
@@ -1287,11 +1363,12 @@ export function PacientesViewSupabase({
       <Dialog open={isNewPatientDialogOpen} onOpenChange={setIsNewPatientDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Registrar Nuevo Paciente</DialogTitle>
+            <DialogTitle>{isEditingPatient ? 'Editar Datos del Paciente' : 'Registrar Nuevo Paciente'}</DialogTitle>
             <DialogDescription>
-              Complete los datos del nuevo paciente
+              {isEditingPatient ? 'Actualice la información del paciente seleccionado' : 'Complete los datos del nuevo paciente'}
             </DialogDescription>
           </DialogHeader>
+
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -1302,9 +1379,10 @@ export function PacientesViewSupabase({
               <Input
                 id="cedula"
                 value={newPatient.cedula}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, cedula: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, cedula: e.target.value.toUpperCase() })}
                 onBlur={handleBlurCedula}
                 placeholder="0000000000"
+                className="uppercase"
               />
             </div>
 
@@ -1313,8 +1391,9 @@ export function PacientesViewSupabase({
               <Input
                 id="nombres"
                 value={newPatient.nombres}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, nombres: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, nombres: e.target.value.toUpperCase() })}
                 placeholder="Nombres"
+                className="uppercase"
               />
             </div>
 
@@ -1323,8 +1402,9 @@ export function PacientesViewSupabase({
               <Input
                 id="apellidos"
                 value={newPatient.apellidos}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, apellidos: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, apellidos: e.target.value.toUpperCase() })}
                 placeholder="Apellidos"
+                className="uppercase"
               />
             </div>
 
@@ -1356,7 +1436,7 @@ export function PacientesViewSupabase({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono</Label>
+              <Label htmlFor="telefono">Teléfono * (Ej: +593984035410)</Label>
               <Input
                 id="telefono"
                 value={newPatient.telefono}
@@ -1366,13 +1446,14 @@ export function PacientesViewSupabase({
             </div>
 
             <div className="space-y-2 col-span-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
+              <Label htmlFor="email">Correo Electrónico *</Label>
               <Input
                 id="email"
                 type="email"
                 value={newPatient.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, email: e.target.value })}
-                placeholder="paciente@email.com"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, email: e.target.value.toUpperCase() })}
+                placeholder="PACIENTE@EMAIL.COM"
+                className="uppercase"
               />
             </div>
 
@@ -1381,8 +1462,9 @@ export function PacientesViewSupabase({
               <Input
                 id="direccion"
                 value={newPatient.direccion}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, direccion: e.target.value })}
-                placeholder="Dirección completa"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPatient({ ...newPatient, direccion: e.target.value.toUpperCase() })}
+                placeholder="DIRECCIÓN COMPLETA"
+                className="uppercase"
               />
             </div>
           </div>
@@ -1392,7 +1474,7 @@ export function PacientesViewSupabase({
               Cancelar
             </Button>
             <Button onClick={handleCreatePatient} className="bg-blue-600 hover:bg-blue-700">
-              Registrar Paciente
+              {isEditingPatient ? 'Actualizar Paciente' : 'Registrar Paciente'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1577,9 +1659,9 @@ export function PacientesViewSupabase({
               <Textarea
                 id="motivoConsulta"
                 value={consultaForm.motivo_consulta}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, motivo_consulta: e.target.value })}
-                placeholder="¿Por qué acude el paciente a consulta?..."
-                className="min-h-[80px] text-sm"
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, motivo_consulta: e.target.value.toUpperCase() })}
+                placeholder="¿POR QUÉ ACUDE EL PACIENTE A CONSULTA?..."
+                className="min-h-[80px] text-sm uppercase"
               />
             </div>
 
@@ -1589,9 +1671,9 @@ export function PacientesViewSupabase({
               <Textarea
                 id="historialClinico"
                 value={consultaForm.historial_clinico}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, historial_clinico: e.target.value })}
-                placeholder="Diagnóstico, observaciones médicas..."
-                className="min-h-[100px] text-sm"
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, historial_clinico: e.target.value.toUpperCase() })}
+                placeholder="DIAGNÓSTICO, OBSERVACIONES MÉDICAS..."
+                className="min-h-[100px] text-sm uppercase"
               />
             </div>
 
@@ -1601,9 +1683,9 @@ export function PacientesViewSupabase({
               <Textarea
                 id="recetaMedica"
                 value={consultaForm.receta_medica}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, receta_medica: e.target.value })}
-                placeholder="Medicamentos y dosis..."
-                className="min-h-[100px] text-sm"
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, receta_medica: e.target.value.toUpperCase() })}
+                placeholder="MEDICAMENTOS Y DOSIS..."
+                className="min-h-[100px] text-sm uppercase"
               />
             </div>
 
@@ -1613,9 +1695,9 @@ export function PacientesViewSupabase({
               <Textarea
                 id="pedidoExamenes"
                 value={consultaForm.pedido_examenes}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, pedido_examenes: e.target.value })}
-                placeholder="Exámenes solicitados..."
-                className="min-h-[100px] text-sm"
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, pedido_examenes: e.target.value.toUpperCase() })}
+                placeholder="EXÁMENES SOLICITADOS..."
+                className="min-h-[100px] text-sm uppercase"
               />
             </div>
           </div>

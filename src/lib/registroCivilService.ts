@@ -43,12 +43,9 @@ const getApiKey = async (): Promise<string | null> => {
         }
 
         const key = data?.valor_texto || null;
-        // console.log('API Key lookup result:', key ? 'Found' : 'Not Found');
-        if (!key) toast.error('DEBUG: No se encontró API Key en tabla rubros');
         return key;
     } catch (error) {
         console.error('Error inesperado al obtener API Key:', error);
-        toast.error('DEBUG: Error al consultar tabla rubros');
         return null;
     }
 };
@@ -110,7 +107,6 @@ export const consultarCedulaRegistroCivil = async (cedula: string): Promise<Pers
         const proxyUrl = `/api/consulta-cedula?Cedula=${cedula}&Apikey=${apiKey}`;
 
         console.log('Fetching via Internal Proxy:', proxyUrl);
-        toast.info('Consultando registro civil...');
 
         const response = await fetch(proxyUrl);
 
@@ -135,7 +131,6 @@ export const consultarCedulaRegistroCivil = async (cedula: string): Promise<Pers
         if (!nombreCompleto && !fechaNacimiento) {
             // Respuesta vacía o inválida
             console.warn('Datos vacíos en respuesta API', data);
-            toast.warning('La API retornó datos vacíos');
             return null;
         }
 
@@ -157,7 +152,6 @@ export const consultarCedulaRegistroCivil = async (cedula: string): Promise<Pers
 
     } catch (error) {
         console.error('Error al consultar registro civil:', error);
-        toast.error('Error de red al consultar registro civil');
         return null;
     }
 };

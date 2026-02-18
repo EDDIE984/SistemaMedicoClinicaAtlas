@@ -38,6 +38,10 @@ import {
   createAsignacionConsultorio,
   updateAsignacionConsultorio,
   deleteAsignacionConsultorio,
+  getAllEspecialidades,
+  createEspecialidad,
+  updateEspecialidad,
+  deleteEspecialidad,
   type Compania,
   type Sucursal,
   type Consultorio,
@@ -46,7 +50,8 @@ import {
   type UsuarioSucursal,
   type PrecioBase,
   type PrecioUsuario,
-  type AsignacionConsultorio
+  type AsignacionConsultorio,
+  type Especialidad
 } from '../lib/configuracionesService';
 
 // ========================================
@@ -120,7 +125,7 @@ export function useSucursales(idCompania?: number) {
 
   const loadSucursales = async () => {
     setIsLoading(true);
-    const data = idCompania 
+    const data = idCompania
       ? await getSucursalesByCompania(idCompania)
       : await getAllSucursales();
     setSucursales(data);
@@ -493,6 +498,60 @@ export function useAsignacionesConsultorio(idUsuarioSucursal?: number) {
     agregarAsignacion,
     actualizarAsignacion,
     eliminarAsignacion
+  };
+}
+
+// ========================================
+// HOOK: ESPECIALIDADES
+// ========================================
+
+export function useEspecialidades() {
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadEspecialidades();
+  }, []);
+
+  const loadEspecialidades = async () => {
+    setIsLoading(true);
+    const data = await getAllEspecialidades();
+    setEspecialidades(data);
+    setIsLoading(false);
+  };
+
+  const agregarEspecialidad = async (especialidad: Omit<Especialidad, 'id_especialidad' | 'created_at'>) => {
+    const nueva = await createEspecialidad(especialidad);
+    if (nueva) {
+      await loadEspecialidades();
+      return nueva;
+    }
+    return null;
+  };
+
+  const actualizarEspecialidad = async (id: number, updates: Partial<Especialidad>) => {
+    const success = await updateEspecialidad(id, updates);
+    if (success) {
+      await loadEspecialidades();
+    }
+    return success;
+  };
+
+  const eliminarEspecialidad = async (id: number) => {
+    const success = await deleteEspecialidad(id);
+    if (success) {
+      await loadEspecialidades();
+    }
+    return success;
+  };
+
+  return {
+    especialidades,
+    isLoading,
+    loadEspecialidades,
+    agregarEspecialidad,
+    actualizarEspecialidad,
+    eliminarEspecialidad
   };
 }
 

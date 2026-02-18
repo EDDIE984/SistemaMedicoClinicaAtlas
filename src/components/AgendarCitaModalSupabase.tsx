@@ -9,13 +9,14 @@ import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 import { usePacientes } from '../hooks/usePacientes';
 import { useHorarios } from '../hooks/useCitas';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Pencil, Edit, Loader2, FileText, Calendar, Clock, X, XCircle, Minimize2, Maximize2 } from 'lucide-react'; // Import icons
 import { getAllPacientes } from '../lib/pacientesService';
 import { getAsignacionesCompletasByUsuario, getSucursalesByCompania, getMedicosBySucursal, type AsignacionCompleta } from '../lib/authService';
 import { createCita, updateCita, generarHorariosDisponibles, type CitaCompleta } from '../lib/citasService';
 import { updatePaciente } from '../lib/pacientesService'; // Import updatePaciente
 import { consultarCedulaRegistroCivil } from '../lib/registroCivilService'; // Import automatic ID lookup
-import { Pencil, Edit, Loader2 } from 'lucide-react'; // Import icons
+import { getAllEspecialidades, type Especialidad, getAllAseguradoras, type Aseguradora } from '../lib/configuracionesService'; // Import getAllEspecialidades and insurers
+
 
 interface AgendarCitaModalProps {
   isOpen: boolean;
@@ -27,6 +28,16 @@ interface AgendarCitaModalProps {
 }
 
 export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUsuarioActual, citaEditar, tipoUsuario }: AgendarCitaModalProps) {
+  const [windowState, setWindowState] = useState<'normal' | 'minimized'>('normal');
+
+  useEffect(() => {
+    if (isOpen && windowState === 'minimized') {
+      // Keep it minimized if it was already minimized
+    } else if (!isOpen) {
+      setWindowState('normal');
+    }
+  }, [isOpen]);
+
   const [step, setStep] = useState<'paciente' | 'detalles' | 'nuevoPaciente'>('paciente');
   const modoEdicion = !!citaEditar;
   const esSecretaria = tipoUsuario === 'secretaria';
@@ -57,6 +68,9 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const [duracion, setDuracion] = useState('30');
   const [tipoCita, setTipoCita] = useState<'consulta' | 'control' | 'emergencia' | 'primera_vez'>('consulta');
   const [motivoConsulta, setMotivoConsulta] = useState('');
+  const [idAseguradora, setIdAseguradora] = useState('1'); // Default to 'Sin Aseguradora'
+  const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([]);
+  const [referencia, setReferencia] = useState('');
 
   const [asignaciones, setAsignaciones] = useState<AsignacionCompleta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +79,8 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   // Estados específicos para SECRETARIA
   const [sucursalSecretaria, setSucursalSecretaria] = useState('');
   const [sucursalesDisponibles, setSucursalesDisponibles] = useState<any[]>([]);
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  const [selectedEspecialidad, setSelectedEspecialidad] = useState('');
   const [medicosDisponibles, setMedicosDisponibles] = useState<AsignacionCompleta[]>([]);
 
   // Estado para edición de paciente
@@ -86,22 +102,34 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
       setSelectedAsignacion(citaEditar.id_usuario_sucursal.toString());
       setFecha(citaEditar.fecha_cita);
       setHoraInicio(citaEditar.hora_inicio.substring(0, 5));
-      setDuracion(citaEditar.duracion_minutos.toString());
+      setDuracion('30');
       setTipoCita(citaEditar.tipo_cita);
       setMotivoConsulta(citaEditar.motivo_consulta);
+      if (citaEditar.id_aseguradora) {
+        setIdAseguradora(citaEditar.id_aseguradora.toString());
+      }
+      if (citaEditar.referencia) {
+        setReferencia(citaEditar.referencia);
+      }
 
       // Si es secretaria, establecer la sucursal y cargar médicos
       if (esSecretaria && citaEditar.usuario_sucursal?.sucursal?.id_sucursal) {
         const idSucursal = citaEditar.usuario_sucursal.sucursal.id_sucursal.toString();
         setSucursalSecretaria(idSucursal);
 
-        // Cargar médicos de esa sucursal para que estén disponibles en el selector
-        const cargarMedicos = async () => {
+        // Cargar especialidades
+        const cargarData = async () => {
+          const especialidadesData = await getAllEspecialidades();
+          setEspecialidades(especialidadesData);
+
+          // Cargar médicos de esa sucursal
           const medicos = await getMedicosBySucursal(citaEditar.usuario_sucursal.sucursal.id_sucursal);
+          // Filtrar por especialidad si hay una seleccionada (o la de la cita)
+          // Nota: getMedicosBySucursal devuelve todas. Filtraremos en render o effect
           setMedicosDisponibles(medicos);
           setAsignaciones(medicos);
         };
-        cargarMedicos();
+        cargarData();
       }
     }
   }, [isOpen, citaEditar, esSecretaria]);
@@ -121,7 +149,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
           setNuevoPaciente(prev => ({
             ...prev,
             id_sucursal: asignacionActiva.id_sucursal,
-            nombre_sucursal: `${asignacionActiva.compania.nombre} - ${asignacionActiva.sucursal.nombre}`
+            nombre_sucursal: `${asignacionActiva.compania.nombre} - ${asignacionActiva.sucursal.nombre} `
           }));
           console.log('✅ Auto-llenada sucursal para nuevo paciente:', asignacionActiva.sucursal.nombre);
         }
@@ -170,6 +198,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
       setSucursalesDisponibles(data);
       console.log('✅ Sucursales cargadas:', data.length);
 
+      const especialidadesData = await getAllEspecialidades();
+      setEspecialidades(especialidadesData);
+
+
+
       // Auto-seleccionar la primera sucursal
       if (data.length > 0 && !modoEdicion) {
         const primeraSucursal = (data as any)[0].id_sucursal.toString();
@@ -180,7 +213,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
         const medicos = await getMedicosBySucursal((data as any)[0].id_sucursal);
         console.log('✅ Médicos cargados automáticamente:', medicos.length);
         setMedicosDisponibles(medicos);
-        setAsignaciones(medicos);
+        // setAsignaciones(medicos); // No asignamos aún para obligar a seleccionar especialidad o médico
       }
     }
   };
@@ -188,6 +221,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const handleSucursalChange = async (sucursalId: string) => {
     console.log('🔄 Cambiando sucursal:', sucursalId);
     setSucursalSecretaria(sucursalId);
+    setSelectedEspecialidad(''); // Reset especialidad
     setSelectedAsignacion(''); // Reset médico
     setFecha(''); // Reset fecha
     setHoraInicio(''); // Reset hora
@@ -197,19 +231,60 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     const medicos = await getMedicosBySucursal(parseInt(sucursalId));
     console.log('✅ Médicos cargados:', medicos.length);
     setMedicosDisponibles(medicos);
-    setAsignaciones(medicos); // Para que funcione el hook de horarios
+    // setAsignaciones(medicos);
   };
 
-  // Cargar sucursales cuando es secretaria y abre el modal
-  useEffect(() => {
-    if (isOpen && esSecretaria && step === 'detalles') {
-      loadSucursales();
-    } else if (isOpen && !esSecretaria) {
-      // Si NO es secretaria, cargar asignaciones normalmente
-      if (idUsuarioActual) {
-        loadAsignaciones();
-      }
+
+
+  const handleEspecialidadChange = (especialidadId: string) => {
+    setSelectedEspecialidad(especialidadId);
+    setSelectedAsignacion(''); // Reset médico al cambiar especialidad
+
+    // Si queremos filtrar automáticamente la lista de médicos, lo hacemos en el render
+    // o aquí si preferimos tener un estado separado de medicosFiltrados.
+    // Usaremos un filtro en el render sobre medicosDisponibles.
+  };
+
+  // Filtrar médicos según la especialidad seleccionada
+  const medicosFiltrados = medicosDisponibles.filter(medico => {
+    if (!selectedEspecialidad) return true; // Si no hay especialidad, mostrar todos (o ninguno, según requerimiento)
+    // Asumiendo que medico.especialidad es el NOMBRE de la especialidad en usuario_sucursal
+    // NECESITAMOS comparar con el ID o el Nombre.
+    // El usuario_sucursal tiene especialidad (string) y id_especialidad (number - nuevo campo).
+    // Si ya migramos id_especialidad, usamos ese.
+
+    // Tratamos de comparar por ID primero, luego por nombre si falla.
+    const especialidadSeleccionada = especialidades.find(e => e.id_especialidad.toString() === selectedEspecialidad);
+
+    if ((medico as any).id_especialidad) {
+      return (medico as any).id_especialidad.toString() === selectedEspecialidad;
     }
+
+    // Fallback: comparar nombre si id no disponible (aunque debería estarlo tras migración)
+    if (especialidadSeleccionada && medico.especialidad) {
+      return medico.especialidad.toLowerCase().trim() === especialidadSeleccionada.nombre.toLowerCase().trim();
+    }
+
+    return false;
+  });
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (isOpen) {
+        // Cargar aseguradoras
+        const aseguradorasData = await getAllAseguradoras();
+        setAseguradoras(aseguradorasData);
+
+        if (esSecretaria && step === 'detalles') {
+          loadSucursales();
+        } else if (!esSecretaria) {
+          if (idUsuarioActual) {
+            loadAsignaciones();
+          }
+        }
+      }
+    };
+    loadInitialData();
   }, [isOpen, esSecretaria, step, idUsuarioActual]);
 
   // Hook de horarios para la asignación seleccionada
@@ -242,7 +317,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     const horasFin = Math.floor(totalMinutos / 60);
     const minutosFin = totalMinutos % 60;
 
-    return `${horasFin.toString().padStart(2, '0')}:${minutosFin.toString().padStart(2, '0')}`;
+    return `${horasFin.toString().padStart(2, '0')}:${minutosFin.toString().padStart(2, '0')} `;
   };
 
   // Cargar citas del día cuando cambia la fecha o la asignación
@@ -335,7 +410,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   // Función para generar el rango de horario (ej: "8:00 - 8:30")
   const generarRangoHorario = (horaInicio: string, duracionMinutos: number): string => {
     const horaFin = calcularHoraFin(horaInicio, duracionMinutos.toString());
-    return `${horaInicio} - ${horaFin}`;
+    return `${horaInicio} - ${horaFin} `;
   };
 
   // Obtener la duración configurada para el día seleccionado
@@ -399,8 +474,24 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
 
   // Crear o Actualizar paciente
   const handleCrearPaciente = async () => {
-    if (!nuevoPaciente.nombres || !nuevoPaciente.apellidos || !nuevoPaciente.cedula) {
-      toast.error('Complete los campos obligatorios (Nombres, Apellidos, Cédula)');
+    // Validar todos los campos obligatorios
+    const { nombres, apellidos, cedula, fecha_nacimiento, email, telefono, direccion, sexo } = nuevoPaciente;
+    if (!nombres || !apellidos || !cedula || !fecha_nacimiento || !sexo || !email || !telefono || !direccion) {
+      toast.error('Todos los campos son obligatorios');
+      return;
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error('Por favor ingrese un correo electrónico válido');
+      return;
+    }
+
+    // Validar formato de teléfono (+5939XXXXXXXX)
+    const phoneRegex = /^\+5939\d{8}$/;
+    if (!phoneRegex.test(telefono)) {
+      toast.error('El teléfono debe tener el formato +5939XXXXXXXX (13 caracteres)');
       return;
     }
 
@@ -508,7 +599,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
 
   // Manejar envío del formulario
   const handleSubmit = async () => {
-    if (!selectedAsignacion || !fecha || !horaInicio || !motivoConsulta) {
+    if (!selectedAsignacion || !fecha || !horaInicio || !motivoConsulta || !referencia || !idAseguradora) {
       toast.error('Por favor complete todos los campos obligatorios');
       return;
     }
@@ -540,6 +631,8 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
           duracion_minutos: parseInt(duracion),
           tipo_cita: tipoCita,
           motivo_consulta: motivoConsulta,
+          id_aseguradora: parseInt(idAseguradora),
+          referencia: referencia
         };
 
         const resultado = await updateCita(citaEditar.id_cita, updates);
@@ -595,6 +688,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
         console.log('📋 Datos de la cita a crear:', {
           id_paciente: parseInt(selectedPacienteId),
           id_usuario_sucursal: parseInt(selectedAsignacion),
+          id_especialidad: parseInt(selectedEspecialidad) || 2,
           id_sucursal: asignacionSeleccionada.id_sucursal,
           id_consultorio: diaConfig.id_consultorio,
           fecha_cita: fecha,
@@ -610,6 +704,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
         const nuevaCita = await createCita({
           id_paciente: parseInt(selectedPacienteId),
           id_usuario_sucursal: parseInt(selectedAsignacion),
+          id_especialidad: parseInt(selectedEspecialidad) || 2, // Default ID 2
           id_sucursal: asignacionSeleccionada.id_sucursal,
           id_consultorio: diaConfig.id_consultorio,
           fecha_cita: fecha,
@@ -619,7 +714,9 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
           tipo_cita: tipoCita,
           motivo_consulta: motivoConsulta,
           estado_cita: 'agendada',
-          precio_cita: precio
+          precio_cita: precio,
+          id_aseguradora: parseInt(idAseguradora),
+          referencia: referencia
         });
 
         if (nuevaCita) {
@@ -639,7 +736,9 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   };
 
   // Cerrar modal y resetear
+  // Cerrar modal y resetear
   const handleClose = () => {
+    setWindowState('normal');
     setStep('paciente');
     setSearchPaciente('');
     setSelectedPacienteId('');
@@ -649,6 +748,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     setDuracion('30');
     setTipoCita('consulta');
     setMotivoConsulta('');
+    setReferencia('');
     setNuevoPaciente({
       nombres: '',
       apellidos: '',
@@ -665,432 +765,475 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {step === 'paciente' && 'Seleccionar Paciente'}
-            {step === 'nuevoPaciente' && (isEditingPatient ? 'Editar Datos del Paciente' : 'Registrar Nuevo Paciente')}
-            {step === 'detalles' && (modoEdicion ? 'Modificar Cita' : 'Detalles de la Cita')}
-          </DialogTitle>
-          <DialogDescription>
-            {step === 'paciente' && 'Busque y seleccione el paciente para la cita'}
-            {step === 'nuevoPaciente' && 'Complete los datos del nuevo paciente'}
-            {step === 'detalles' && (modoEdicion ? 'Modifique los datos de la cita médica' : 'Complete la información de la cita médica')}
-          </DialogDescription>
-        </DialogHeader>
-
-        {step === 'paciente' ? (
-          <div className="space-y-4">
-            {/* Buscador y Botón Nuevo Paciente */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 size-4" />
-                <Input
-                  placeholder="Buscar por nombre, apellido o cédula..."
-                  value={searchPaciente}
-                  onChange={(e) => setSearchPaciente(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+    <>
+      <Dialog open={isOpen && windowState !== 'minimized'} onOpenChange={handleClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="relative">
+            <div className="absolute left-0 top-0 -translate-y-1">
               <Button
-                onClick={() => {
-                  setIsEditingPatient(false);
-                  setStep('nuevoPaciente');
-                }}
-                className="bg-gray-900 hover:bg-gray-800 whitespace-nowrap"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-gray-100"
+                onClick={() => setWindowState('minimized')}
+                title="Minimizar"
               >
-                <Plus className="size-4 mr-2" />
-                Nuevo Paciente
+                <Minimize2 className="h-4 w-4 text-gray-500" />
               </Button>
             </div>
+            <DialogTitle className="pl-10">
+              {step === 'paciente' && 'Seleccionar Paciente'}
+              {step === 'nuevoPaciente' && (isEditingPatient ? 'Editar Datos del Paciente' : 'Registrar Nuevo Paciente')}
+              {step === 'detalles' && (modoEdicion ? 'Modificar Cita' : 'Detalles de la Cita')}
+            </DialogTitle>
+            <DialogDescription className="pl-10">
+              {step === 'paciente' && 'Busque y seleccione el paciente para la cita'}
+              {step === 'nuevoPaciente' && 'Complete los datos del nuevo paciente'}
+              {step === 'detalles' && (modoEdicion ? 'Modifique los datos de la cita médica' : 'Complete la información de la cita médica')}
+            </DialogDescription>
+          </DialogHeader>
 
-            {/* Lista de pacientes */}
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {pacientesFiltrados.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  {searchPaciente ? 'No se encontraron pacientes' : 'No hay pacientes registrados'}
+          {step === 'paciente' ? (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 size-4" />
+                  <Input
+                    placeholder="Buscar por nombre, apellido o cédula..."
+                    value={searchPaciente}
+                    onChange={(e) => setSearchPaciente(e.target.value.toUpperCase())}
+                    className="pl-10 uppercase"
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    setIsEditingPatient(false);
+                    setStep('nuevoPaciente');
+                  }}
+                  className="bg-gray-900 hover:bg-gray-800 whitespace-nowrap"
+                >
+                  <Plus className="size-4 mr-2" />
+                  Nuevo Paciente
+                </Button>
+              </div>
+
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {pacientesFiltrados.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    {searchPaciente ? 'No se encontraron pacientes' : 'No hay pacientes registrados'}
+                  </div>
+                )}
+
+                {pacientesFiltrados.map((paciente) => (
+                  <div
+                    key={paciente.id_paciente}
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedPacienteId === paciente.id_paciente.toString()
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'hover:bg-gray-50'
+                      }`}
+                    onClick={() => setSelectedPacienteId(paciente.id_paciente.toString())}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">
+                          {paciente.nombres} {paciente.apellidos}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {paciente.cedula} • {paciente.telefono || 'Sin teléfono'}
+                        </p>
+                      </div>
+                      {selectedPacienteId === paciente.id_paciente.toString() && (
+                        <div className="text-blue-600">✓</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : step === 'nuevoPaciente' ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label>Sucursal *</Label>
+                  <Input
+                    value={nuevoPaciente.nombre_sucursal}
+                    disabled
+                    className="bg-gray-50 text-gray-600"
+                    placeholder="Cargando sucursal..."
+                  />
+                  <p className="text-xs text-gray-500">Se asignará automáticamente a su sucursal actual</p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <Label>Cédula *</Label>
+                    {isSearchingCedula && <span className="text-xs text-blue-600 flex items-center"><Loader2 className="size-3 animate-spin mr-1" /> Buscando...</span>}
+                  </div>
+                  <Input
+                    value={nuevoPaciente.cedula}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, cedula: e.target.value })}
+                    onBlur={handleBlurCedula}
+                    placeholder="0000000000"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Nombres *</Label>
+                  <Input
+                    value={nuevoPaciente.nombres}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, nombres: e.target.value.toUpperCase() })}
+                    placeholder="Nombres"
+                    className="uppercase"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Apellidos *</Label>
+                  <Input
+                    value={nuevoPaciente.apellidos}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, apellidos: e.target.value.toUpperCase() })}
+                    placeholder="Apellidos"
+                    className="uppercase"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Fecha de Nacimiento *</Label>
+                  <Input
+                    type="date"
+                    value={nuevoPaciente.fecha_nacimiento}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, fecha_nacimiento: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Sexo *</Label>
+                  <Select
+                    value={nuevoPaciente.sexo}
+                    onValueChange={(value: string) => setNuevoPaciente({ ...nuevoPaciente, sexo: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Femenino</SelectItem>
+                      <SelectItem value="Otro">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={nuevoPaciente.email}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, email: e.target.value.toUpperCase() })}
+                    placeholder="EJEMPLO@CORREO.COM"
+                    className="uppercase"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Teléfono * (Ej: +593984035410)</Label>
+                  <Input
+                    value={nuevoPaciente.telefono}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, telefono: e.target.value })}
+                    placeholder="+593984035410"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Dirección *</Label>
+                  <Input
+                    value={nuevoPaciente.direccion}
+                    onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, direccion: e.target.value.toUpperCase() })}
+                    placeholder="DIRECCIÓN COMPLETA"
+                    className="uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-blue-50/50 p-3 rounded-md border border-blue-100 flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Paciente</p>
+                  <p className="font-medium text-gray-900">
+                    {(() => {
+                      const pacienteActual = pacientes.find(p => p.id_paciente.toString() === selectedPacienteId);
+                      if (pacienteActual) {
+                        return `${pacienteActual.nombres} ${pacienteActual.apellidos}`;
+                      }
+                      return citaEditar?.paciente
+                        ? `${citaEditar.paciente.nombres} ${citaEditar.paciente.apellidos}`
+                        : '';
+                    })()}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleEditPaciente} className="h-8 w-8 p-0">
+                  <Pencil className="size-4 text-gray-500 hover:text-blue-600" />
+                </Button>
+              </div>
+
+              {esSecretaria ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Sucursal *</Label>
+                    <Select value={sucursalSecretaria} onValueChange={handleSucursalChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione sucursal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sucursalesDisponibles.map((suc) => (
+                          <SelectItem key={suc.id_sucursal} value={suc.id_sucursal.toString()}>
+                            {suc.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {sucursalSecretaria && (
+                    <div className="space-y-2">
+                      <Label>Especialidad *</Label>
+                      <Select value={selectedEspecialidad} onValueChange={handleEspecialidadChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione especialidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {especialidades.map((esp) => (
+                            <SelectItem key={esp.id_especialidad} value={esp.id_especialidad.toString()}>
+                              {esp.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {sucursalSecretaria && (
+                    <div className="space-y-2">
+                      <Label>Médico *</Label>
+                      <Select value={selectedAsignacion} onValueChange={setSelectedAsignacion}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione médico" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {medicosFiltrados.length === 0 ? (
+                            <div className="p-2 text-sm text-gray-500">
+                              {selectedEspecialidad ? 'No hay médicos de esta especialidad' : 'Seleccione una especialidad primero'}
+                            </div>
+                          ) : (
+                            medicosFiltrados.map((medico: any) => (
+                              <SelectItem key={medico.id_usuario_sucursal} value={medico.id_usuario_sucursal.toString()}>
+                                Dr. {medico.usuario.nombre} {medico.usuario.apellido} - {medico.especialidad}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Sucursal *</Label>
+                  <Input
+                    value={asignaciones.length > 0 ? `${asignaciones[0].compania.nombre} - ${asignaciones[0].sucursal.nombre}` : 'Cargando...'}
+                    disabled
+                    className="bg-gray-50 text-gray-600"
+                  />
                 </div>
               )}
 
-              {pacientesFiltrados.map((paciente) => (
-                <div
-                  key={paciente.id_paciente}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedPacienteId === paciente.id_paciente.toString()
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'hover:bg-gray-50'
-                    }`}
-                  onClick={() => setSelectedPacienteId(paciente.id_paciente.toString())}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">
-                        {paciente.nombres} {paciente.apellidos}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {paciente.cedula} • {paciente.telefono || 'Sin teléfono'}
-                      </p>
-                    </div>
-                    {selectedPacienteId === paciente.id_paciente.toString() && (
-                      <div className="text-blue-600">✓</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : step === 'nuevoPaciente' ? (
-          <div className="space-y-4">
-            {/* Formulario Nuevo Paciente */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Campo Sucursal (solo lectura) */}
-              <div className="space-y-2 col-span-2">
-                <Label>Sucursal *</Label>
-                <Input
-                  value={nuevoPaciente.nombre_sucursal}
-                  disabled
-                  className="bg-gray-50 text-gray-600"
-                  placeholder="Cargando sucursal..."
-                />
-                <p className="text-xs text-gray-500">Se asignará automáticamente a su sucursal actual</p>
-              </div>
-
               <div className="space-y-2">
-                <div className="flex justify-between">
-                  <Label>Cédula *</Label>
-                  {isSearchingCedula && <span className="text-xs text-blue-600 flex items-center"><Loader2 className="size-3 animate-spin mr-1" /> Buscando...</span>}
-                </div>
-                <Input
-                  value={nuevoPaciente.cedula}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, cedula: e.target.value })}
-                  onBlur={handleBlurCedula}
-                  placeholder="0000000000"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Nombres *</Label>
-                <Input
-                  value={nuevoPaciente.nombres}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, nombres: e.target.value })}
-                  placeholder="Nombres"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Apellidos *</Label>
-                <Input
-                  value={nuevoPaciente.apellidos}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, apellidos: e.target.value })}
-                  placeholder="Apellidos"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Fecha de Nacimiento</Label>
+                <Label>Fecha *</Label>
                 <Input
                   type="date"
-                  value={nuevoPaciente.fecha_nacimiento}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, fecha_nacimiento: e.target.value })}
+                  value={fecha}
+                  onChange={(e) => {
+                    setFecha(e.target.value);
+                    setHoraInicio('');
+                  }}
+                  min={new Date().toISOString().split('T')[0]}
                 />
+                {fecha && !isDiaDisponible(fecha) && (
+                  <p className="text-xs text-red-500">
+                    el Doctor(a) seleccionado no tiene configurado horarios de cita para el día seleccionado
+                  </p>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <Label>Sexo</Label>
-                <Select
-                  value={nuevoPaciente.sexo}
-                  onValueChange={(value: string) => setNuevoPaciente({ ...nuevoPaciente, sexo: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="M">Masculino</SelectItem>
-                    <SelectItem value="F">Femenino</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Teléfono</Label>
-                <Input
-                  value={nuevoPaciente.telefono}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, telefono: e.target.value })}
-                  placeholder="0999999999"
-                />
-              </div>
-
-              <div className="space-y-2 col-span-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={nuevoPaciente.email}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, email: e.target.value })}
-                  placeholder="paciente@email.com"
-                />
-              </div>
-
-              <div className="space-y-2 col-span-2">
-                <Label>Dirección</Label>
-                <Input
-                  value={nuevoPaciente.direccion}
-                  onChange={(e) => setNuevoPaciente({ ...nuevoPaciente, direccion: e.target.value })}
-                  placeholder="Dirección completa"
-                />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Header con Paciente y Botón Editar */}
-            <div className="bg-blue-50/50 p-3 rounded-md border border-blue-100 flex justify-between items-center">
-              <div>
-                <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Paciente</p>
-                <p className="font-medium text-gray-900">
-                  {(() => {
-                    const pacienteActual = pacientes.find(p => p.id_paciente.toString() === selectedPacienteId);
-                    if (pacienteActual) {
-                      return `${pacienteActual.nombres} ${pacienteActual.apellidos}`;
-                    }
-                    return citaEditar?.paciente
-                      ? `${citaEditar.paciente.nombres} ${citaEditar.paciente.apellidos}`
-                      : '';
-                  })()}
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleEditPaciente} className="h-8 w-8 p-0">
-                <Pencil className="size-4 text-gray-500 hover:text-blue-600" />
-              </Button>
-            </div>
-
-            {/* Sucursal - DIFERENTE PARA SECRETARIA */}
-            {esSecretaria ? (
-              <>
-                {/* Selector de Sucursal para Secretaria */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Sucursal *</Label>
-                  <Select
-                    value={sucursalSecretaria}
-                    onValueChange={handleSucursalChange}
-                  >
+                  <Label>Hora de Inicio *</Label>
+                  <Select value={horaInicio} onValueChange={setHoraInicio} disabled={!fecha || !isDiaDisponible(fecha)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccione sucursal" />
+                      <SelectValue placeholder="Seleccione hora" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sucursalesDisponibles.map((suc) => (
-                        <SelectItem key={suc.id_sucursal} value={suc.id_sucursal.toString()}>
-                          {suc.nombre}
+                      {horariosDisponibles.map((hora) => (
+                        <SelectItem key={hora} value={hora}>
+                          {generarRangoHorario(hora, getDuracionConfigurada())}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500">
-                    {modoEdicion ? 'La sucursal no puede modificarse' : 'Seleccione la sucursal donde se realizará la cita'}
-                  </p>
                 </div>
 
-                {/* Selector de Médico para Secretaria */}
-                {sucursalSecretaria && (
-                  <div className="space-y-2">
-                    <Label>Médico *</Label>
-                    <Select
-                      value={selectedAsignacion}
-                      onValueChange={setSelectedAsignacion}
-                      disabled={!sucursalSecretaria}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione médico" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {medicosDisponibles.length === 0 ? (
-                          <div className="p-2 text-sm text-gray-500">
-                            No hay médicos disponibles en esta sucursal
-                          </div>
-                        ) : (
-                          medicosDisponibles.map((medico: any) => (
-                            <SelectItem
-                              key={medico.id_usuario_sucursal}
-                              value={medico.id_usuario_sucursal.toString()}
-                            >
-                              Dr. {medico.usuario.nombre} {medico.usuario.apellido} - {medico.especialidad}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-gray-500">
-                      {modoEdicion ? 'El médico no puede modificarse' : 'Seleccione el médico para la cita'}
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Campo de sucursal deshabilitado para médicos */
-              <div className="space-y-2">
-                <Label>Sucursal *</Label>
-                <Input
-                  value={asignaciones.length > 0 ? `${asignaciones[0].compania.nombre} - ${asignaciones[0].sucursal.nombre}` : 'Cargando...'}
-                  disabled
-                  className="bg-gray-50 text-gray-600"
-                />
-                <p className="text-xs text-gray-500">
-                  {modoEdicion ? 'La sucursal no puede modificarse' : 'Se usará automáticamente su sucursal actual'}
-                </p>
+                <div className="space-y-2">
+                  <Label>Duración (minutos) *</Label>
+                  <Select value="30" onValueChange={setDuracion} disabled>
+                    <SelectTrigger className="bg-gray-50">
+                      <SelectValue placeholder="30 minutos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 minutos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            )}
 
-            {/* Fecha */}
-            <div className="space-y-2">
-              <Label>Fecha *</Label>
-              <Input
-                type="date"
-                value={fecha}
-                onChange={(e) => {
-                  setFecha(e.target.value);
-                  setHoraInicio(''); // Reset hora cuando cambia la fecha
-                }}
-                min={new Date().toISOString().split('T')[0]}
-              />
-              {fecha && !isDiaDisponible(fecha) && (
-                <p className="text-xs text-red-500">
-                  Este día no tiene horario de atención configurado
-                </p>
+              {horaInicio && (
+                <div className="text-sm text-gray-600">
+                  Hora de finalización: <span className="font-semibold">{calcularHoraFin(horaInicio, duracion)}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo de Cita *</Label>
+                  <Select value={tipoCita} onValueChange={(value: any) => setTipoCita(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consulta">Consulta</SelectItem>
+                      <SelectItem value="control">Control</SelectItem>
+                      <SelectItem value="primera_vez">Primera Vez</SelectItem>
+                      <SelectItem value="emergencia">Emergencia</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Aseguradora *</Label>
+                  <Select value={idAseguradora} onValueChange={setIdAseguradora}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar aseguradora" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aseguradoras.map((aseg) => (
+                        <SelectItem key={aseg.id_aseguradora} value={aseg.id_aseguradora.toString()}>
+                          {aseg.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Motivo de Consulta *</Label>
+                <Textarea
+                  value={motivoConsulta}
+                  onChange={(e) => setMotivoConsulta(e.target.value.toUpperCase())}
+                  placeholder="DESCRIBA BREVEMENTE EL MOTIVO DE LA CONSULTA"
+                  rows={3}
+                  className="uppercase"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Referencia *</Label>
+                <Select value={referencia} onValueChange={setReferencia}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="¿Cómo nos conoció?" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Redes Sociales">Redes Sociales</SelectItem>
+                    <SelectItem value="Mi médico">Mi médico</SelectItem>
+                    <SelectItem value="Familia/Amigos">Familia/Amigos</SelectItem>
+                    <SelectItem value="Conocía la clínica">Conocía la clínica</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedAsignacion && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-sm">
+                    <span className="text-gray-600">Precio de consulta:</span>{' '}
+                    <span className="font-semibold text-blue-700">${precio.toFixed(2)}</span>
+                  </p>
+                </div>
               )}
             </div>
+          )}
 
-            {/* Hora */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Hora de Inicio *</Label>
-                <Select
-                  value={horaInicio}
-                  onValueChange={setHoraInicio}
-                  disabled={!fecha || !isDiaDisponible(fecha)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione hora" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {horariosDisponibles.map((hora) => (
-                      <SelectItem key={hora} value={hora}>
-                        {generarRangoHorario(hora, getDuracionConfigurada())}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Duración (minutos) *</Label>
-                <Select value={duracion} onValueChange={setDuracion}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="15">15 minutos</SelectItem>
-                    <SelectItem value="30">30 minutos</SelectItem>
-                    <SelectItem value="45">45 minutos</SelectItem>
-                    <SelectItem value="60">1 hora</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Hora Fin (calculada) */}
-            {horaInicio && (
-              <div className="text-sm text-gray-600">
-                Hora de finalización: <span className="font-semibold">{calcularHoraFin(horaInicio, duracion)}</span>
-              </div>
+          <DialogFooter>
+            {(step === 'detalles' || step === 'nuevoPaciente') && !modoEdicion && (
+              <Button variant="outline" onClick={() => setStep('paciente')}>
+                Atrás
+              </Button>
             )}
-
-            {/* Tipo de Cita */}
-            <div className="space-y-2">
-              <Label>Tipo de Cita *</Label>
-              <Select value={tipoCita} onValueChange={(value: any) => setTipoCita(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="consulta">Consulta</SelectItem>
-                  <SelectItem value="control">Control</SelectItem>
-                  <SelectItem value="primera_vez">Primera Vez</SelectItem>
-                  <SelectItem value="emergencia">Emergencia</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Motivo */}
-            <div className="space-y-2">
-              <Label>Motivo de Consulta *</Label>
-              <Textarea
-                value={motivoConsulta}
-                onChange={(e) => setMotivoConsulta(e.target.value)}
-                placeholder="Describa brevemente el motivo de la consulta"
-                rows={3}
-              />
-            </div>
-
-            {/* Precio */}
-            {selectedAsignacion && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm">
-                  <span className="text-gray-600">Precio de consulta:</span>{' '}
-                  <span className="font-semibold text-blue-700">${precio.toFixed(2)}</span>
-                </p>
-              </div>
+            <Button variant="outline" onClick={handleClose}>
+              Cancelar
+            </Button>
+            {step === 'paciente' && (
+              <Button onClick={handleNextStep} className="bg-blue-600 hover:bg-blue-700">
+                Siguiente
+              </Button>
             )}
+            {step === 'nuevoPaciente' && (
+              <Button onClick={handleCrearPaciente} className="bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                {isLoading ? 'Guardando...' : (isEditingPatient ? 'Actualizar Paciente' : 'Guardar Paciente')}
+              </Button>
+            )}
+            {step === 'detalles' && (
+              <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                {isLoading ? (modoEdicion ? 'Modificando...' : 'Agendando...') : (modoEdicion ? 'Modificar Cita' : 'Agendar Cita')}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isOpen && windowState === 'minimized' && (
+        <div
+          className="fixed bottom-4 left-4 z-[100] w-72 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden animate-in slide-in-from-bottom-2 duration-300"
+        >
+          <div className="bg-gray-900 px-3 py-2 flex items-center justify-between text-white">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <Calendar className="size-4 shrink-0 text-blue-400" />
+              <span className="text-xs font-medium truncate">
+                {step === 'paciente' && 'Agendar: Buscando paciente'}
+                {step === 'nuevoPaciente' && 'Agendar: Nuevo paciente'}
+                {step === 'detalles' && (selectedPacienteId
+                  ? `Agendar: ${pacientes.find(p => p.id_paciente.toString() === selectedPacienteId)?.nombres || 'Paciente'}`
+                  : 'Agendar: Detalles')}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 hover:bg-white/20 text-white p-0 border-none"
+                onClick={() => setWindowState('normal')}
+                title="Restaurar"
+              >
+                <Maximize2 className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 hover:bg-white/20 text-white p-0 border-none"
+                onClick={handleClose}
+                title="Cerrar"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
-        )}
-
-        <DialogFooter>
-          {/* Botón Atrás */}
-          {step === 'detalles' && !modoEdicion && (
-            <Button variant="outline" onClick={() => setStep('paciente')}>
-              Atrás
-            </Button>
-          )}
-          {step === 'nuevoPaciente' && (
-            <Button variant="outline" onClick={() => setStep('paciente')}>
-              Atrás
-            </Button>
-          )}
-
-          {/* Botón Cancelar */}
-          <Button variant="outline" onClick={handleClose}>
-            Cancelar
-          </Button>
-
-          {/* Botones de acción según paso */}
-          {step === 'paciente' && (
-            <Button onClick={handleNextStep} className="bg-blue-600 hover:bg-blue-700">
-              Siguiente
-            </Button>
-          )}
-
-          {step === 'nuevoPaciente' && (
-            <Button
-              onClick={handleCrearPaciente}
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Guardando...' : (isEditingPatient ? 'Actualizar Paciente' : 'Guardar Paciente')}
-            </Button>
-          )}
-
-          {step === 'detalles' && (
-            <Button
-              onClick={handleSubmit}
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={isLoading}
-            >
-              {isLoading
-                ? (modoEdicion ? 'Modificando...' : 'Agendando...')
-                : (modoEdicion ? 'Modificar Cita' : 'Agendar Cita')
-              }
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </>
   );
 }

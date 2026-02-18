@@ -266,15 +266,15 @@ const mockPatients: Patient[] = [
   },
 ];
 
-function PatientCard({ 
-  patient, 
-  isExpanded, 
-  onToggle, 
+function PatientCard({
+  patient,
+  isExpanded,
+  onToggle,
   onIniciarConsulta,
   onAgregarSignosVitales,
   onAgregarArchivo
-}: { 
-  patient: Patient; 
+}: {
+  patient: Patient;
   isExpanded: boolean;
   onToggle: () => void;
   onIniciarConsulta: () => void;
@@ -331,7 +331,7 @@ function PatientCard({
   return (
     <>
       <Card className="mb-3 hover:shadow-md transition-shadow">
-        <CardHeader 
+        <CardHeader
           className="cursor-pointer p-4"
           onClick={onToggle}
         >
@@ -347,9 +347,9 @@ function PatientCard({
                   {formatDate(patient.fechaNacimiento)} • {calculateAge(patient.fechaNacimiento)} años
                 </p>
                 {isExpanded && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
                       onIniciarConsulta();
@@ -547,8 +547,8 @@ function PatientCard({
             <div className="border-t pt-4 mt-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm text-gray-900">Archivos Adjuntos ({patient.archivos.length})</Label>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => setIsUploadDialogOpen(true)}
                 >
@@ -570,7 +570,7 @@ function PatientCard({
                   />
                 </div>
               )}
-              
+
               {/* Archivos existentes */}
               <div className="space-y-2 mb-3">
                 {patient.archivos.length === 0 && (
@@ -580,18 +580,18 @@ function PatientCard({
                 {patient.archivos.filter(archivo => {
                   const searchTerm = filtroArchivos.toLowerCase();
                   return archivo.nombre.toLowerCase().includes(searchTerm) ||
-                         archivo.descripcion.toLowerCase().includes(searchTerm) ||
-                         archivo.fecha.includes(searchTerm);
+                    archivo.descripcion.toLowerCase().includes(searchTerm) ||
+                    archivo.fecha.includes(searchTerm);
                 }).length === 0 && patient.archivos.length > 0 && (
-                  <p className="text-center py-4 text-gray-500 text-sm">No se encontraron archivos</p>
-                )}
+                    <p className="text-center py-4 text-gray-500 text-sm">No se encontraron archivos</p>
+                  )}
 
                 {patient.archivos
                   .filter(archivo => {
                     const searchTerm = filtroArchivos.toLowerCase();
                     return archivo.nombre.toLowerCase().includes(searchTerm) ||
-                           archivo.descripcion.toLowerCase().includes(searchTerm) ||
-                           archivo.fecha.includes(searchTerm);
+                      archivo.descripcion.toLowerCase().includes(searchTerm) ||
+                      archivo.fecha.includes(searchTerm);
                   })
                   .map((archivo) => (
                     <div key={archivo.id} className="p-3 bg-gray-50 rounded border space-y-2">
@@ -612,8 +612,8 @@ function PatientCard({
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => setArchivoVisualizando(archivo)}
                             className="h-7 w-7 p-0 hover:bg-blue-100"
@@ -621,8 +621,8 @@ function PatientCard({
                           >
                             <Eye className="size-4 text-blue-600" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 hover:bg-red-100"
                             title="Eliminar archivo"
@@ -648,7 +648,7 @@ function PatientCard({
               El archivo se guardará con formato: {patient.cedula}-{patient.nombre.replace(/\s+/g, '-')}-YYYY-MM-DD-descripcion.ext
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
               <p className="font-medium mb-1">ℹ️ Formato automático de nombres</p>
@@ -687,7 +687,7 @@ function PatientCard({
               const nombreLimpio = patient.nombre.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
               const descripcionLimpia = nuevoArchivo.descripcion.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').substring(0, 50);
               const nombreGenerado = `${patient.cedula}-${nombreLimpio}-${fecha}-${descripcionLimpia}.${extension}`;
-              
+
               return (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <Label className="text-xs text-green-900 block mb-1">Vista previa del nombre:</Label>
@@ -751,7 +751,7 @@ function PatientCard({
               <span className="text-xs">{archivoVisualizando?.fecha}</span>
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Descripción del archivo */}
             {archivoVisualizando?.descripcion && (
@@ -775,14 +775,14 @@ function PatientCard({
                   <p className="text-xs text-gray-600 mt-1"><strong>URL:</strong> {archivoVisualizando.url}</p>
                 )}
               </div>
-              
+
               {/* Nota técnica */}
               <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded p-3 text-left">
                 <p className="text-xs text-yellow-900">
-                  <strong>💡 Para implementar en Supabase:</strong><br/>
-                  1. Crear bucket en Supabase Storage<br/>
-                  2. Subir archivo: <code className="bg-yellow-100 px-1">supabase.storage.from(&apos;archivos-pacientes&apos;).upload(nombreArchivo, file)</code><br/>
-                  3. Obtener URL: <code className="bg-yellow-100 px-1">supabase.storage.from(&apos;archivos-pacientes&apos;).getPublicUrl(nombreArchivo)</code><br/>
+                  <strong>💡 Para implementar en Supabase:</strong><br />
+                  1. Crear bucket en Supabase Storage<br />
+                  2. Subir archivo: <code className="bg-yellow-100 px-1">supabase.storage.from(&apos;archivos-pacientes&apos;).upload(nombreArchivo, file)</code><br />
+                  3. Obtener URL: <code className="bg-yellow-100 px-1">supabase.storage.from(&apos;archivos-pacientes&apos;).getPublicUrl(nombreArchivo)</code><br />
                   4. Renderizar: <code className="bg-yellow-100 px-1">&lt;iframe src=&#123;url&#125; className=&quot;w-full h-96&quot; /&gt;</code>
                 </p>
               </div>
@@ -903,12 +903,12 @@ function HistorialCitasView({ patient }: { patient: Patient }) {
   );
 }
 
-export function PacientesView({ 
+export function PacientesView({
   currentUser,
   pacienteIdInicial,
   citaIdInicial,
   onConsultaCompletada
-}: { 
+}: {
   currentUser?: { email: string } | null;
   pacienteIdInicial?: string | null;
   citaIdInicial?: number | null;
@@ -927,7 +927,7 @@ export function PacientesView({
       // Obtener el paciente de mockData usando el ID
       const pacienteIdNumerico = parseInt(pacienteIdInicial);
       const pacienteMockData = getPacienteById(pacienteIdNumerico);
-      
+
       if (pacienteMockData) {
         // Usar la cédula para filtrar (es única y garantiza que solo aparezca un paciente)
         setSearchTerm(pacienteMockData.numero_identificacion);
@@ -1003,7 +1003,7 @@ export function PacientesView({
 
   const filteredPatients = patients.filter((patient) => {
     if (!searchTerm.trim()) return true;
-    
+
     const searchLower = searchTerm.toLowerCase();
     return (
       patient.nombre.toLowerCase().includes(searchLower) ||
@@ -1021,8 +1021,8 @@ export function PacientesView({
     }
   };
 
-  const selectedPatient = expandedPatientId 
-    ? patients.find(p => p.id === expandedPatientId) 
+  const selectedPatient = expandedPatientId
+    ? patients.find(p => p.id === expandedPatientId)
     : null;
 
   const handleIniciarConsulta = () => {
@@ -1086,7 +1086,7 @@ export function PacientesView({
     });
 
     setPatients(updatedPatients);
-    
+
     // IMPORTANTE: Actualizar también mockPatients para persistir los datos
     const patientIndex = mockPatients.findIndex(p => p.id === selectedPatient.id);
     if (patientIndex !== -1) {
@@ -1095,7 +1095,7 @@ export function PacientesView({
         historialSignosVitales: [nuevosSignosVitales, ...mockPatients[patientIndex].historialSignosVitales],
       };
     }
-    
+
     setIsSignosVitalesDialogOpen(false);
   };
 
@@ -1133,7 +1133,7 @@ export function PacientesView({
     });
 
     setPatients(updatedPatients);
-    
+
     // IMPORTANTE: Actualizar también mockPatients para persistir los datos
     const patientIndex = mockPatients.findIndex(p => p.id === selectedPatient.id);
     if (patientIndex !== -1) {
@@ -1142,9 +1142,9 @@ export function PacientesView({
         consultas: [nuevaConsulta, ...mockPatients[patientIndex].consultas],
       };
     }
-    
+
     setIsConsultaDialogOpen(false);
-    
+
     // Marcar la cita como realizada si viene desde Agenda
     if (citaIdInicial) {
       marcarConsultaRealizada(citaIdInicial);
@@ -1154,26 +1154,26 @@ export function PacientesView({
       try {
         // Obtener información del usuario actual
         const usuario = currentUser ? getUsuarioByEmail(currentUser.email) : null;
-        
+
         if (usuario) {
           // Obtener asignaciones del usuario (sucursal y especialidad)
           const asignaciones = getAsignacionesByUsuario(usuario.id_usuario);
-          
+
           if (asignaciones.length > 0) {
             // Usar la primera asignación activa (sucursal principal)
             const asignacionPrincipal = asignaciones.find(a => a.es_sucursal_principal) || asignaciones[0];
-            
+
             // Obtener precio de la consulta
             const precioCita = getPrecioUsuarioSucursal(asignacionPrincipal.id_usuario_sucursal, 'consulta');
-            
+
             // Buscar el paciente en mockData para obtener su id_paciente real
             const pacienteReal = getPacienteById(parseInt(selectedPatient.id));
-            
+
             if (pacienteReal) {
               // Crear la cita en el sistema
               const horaActual = now.toTimeString().split(' ')[0].substring(0, 5);
               const horaFin = new Date(now.getTime() + 30 * 60000).toTimeString().split(' ')[0].substring(0, 5);
-              
+
               const nuevaCita = addCita({
                 id_paciente: pacienteReal.id_paciente,
                 id_usuario_sucursal: asignacionPrincipal.id_usuario_sucursal,
@@ -1197,7 +1197,7 @@ export function PacientesView({
                 confirmacion_paciente: false,
                 consulta_realizada: true
               });
-              
+
               toast.success('Consulta guardada. Cargo generado automáticamente en la pestaña Cargos.');
             } else {
               toast.success('Consulta guardada exitosamente.');
@@ -1213,7 +1213,7 @@ export function PacientesView({
         toast.success('Consulta guardada exitosamente.');
       }
     }
-    
+
     // Notificar que la consulta fue completada
     if (onConsultaCompletada) {
       onConsultaCompletada();
@@ -1235,7 +1235,7 @@ export function PacientesView({
     });
 
     setPatients(updatedPatients);
-    
+
     // IMPORTANTE: Actualizar también mockPatients para persistir los datos
     const patientIndex = mockPatients.findIndex(p => p.id === selectedPatient.id);
     if (patientIndex !== -1) {
@@ -1262,7 +1262,7 @@ export function PacientesView({
     });
 
     setPatients(updatedPatients);
-    
+
     // IMPORTANTE: Actualizar también mockPatients para persistir los datos
     const patientIndex = mockPatients.findIndex(p => p.id === patientId);
     if (patientIndex !== -1) {
@@ -1333,8 +1333,8 @@ export function PacientesView({
                 filteredPatients
                   .filter(patient => !expandedPatientId || patient.id === expandedPatientId)
                   .map((patient) => (
-                    <PatientCard 
-                      key={patient.id} 
+                    <PatientCard
+                      key={patient.id}
                       patient={patient}
                       isExpanded={expandedPatientId === patient.id}
                       onToggle={() => handleTogglePatient(patient.id)}
@@ -1345,11 +1345,11 @@ export function PacientesView({
                   ))
               )}
             </div>
-            
+
             {/* Botón para volver a ver todos los pacientes */}
             {expandedPatientId && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full mt-4"
                 onClick={() => handleTogglePatient(expandedPatientId)}
               >
@@ -1363,7 +1363,7 @@ export function PacientesView({
         {expandedPatientId && selectedPatient && (
           <div className="lg:col-span-1">
             <Card className="p-4">
-              <AntecedentesView 
+              <AntecedentesView
                 pacienteId={selectedPatient.id}
                 pacienteNombre={selectedPatient.nombre}
                 antecedentes={selectedPatient.antecedentes}
@@ -1485,7 +1485,7 @@ export function PacientesView({
               <span className="capitalize">{getFechaActual()}</span>
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-3 p-4 border rounded-lg bg-blue-50">
             <Label className="text-sm text-gray-900">Signos Vitales</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -1640,7 +1640,7 @@ export function PacientesView({
               <span className="capitalize">{getFechaActual()}</span>
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Historial Clínico */}
             <div className="space-y-2">

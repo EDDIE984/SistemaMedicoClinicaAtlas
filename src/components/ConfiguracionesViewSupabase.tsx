@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Building2, MapPin, Users, UserCog, DollarSign, Tag, DoorOpen, CalendarClock } from 'lucide-react';
+import { Building2, MapPin, Users, UserCog, DollarSign, Tag, DoorOpen, CalendarClock, Stethoscope } from 'lucide-react';
 import { SupabaseIndicator } from './SupabaseIndicator';
 
 // Importar tabs individuales
@@ -14,6 +14,7 @@ import { UsuarioSucursalTabSupabase } from './config/UsuarioSucursalTabSupabase'
 import { PrecioBaseTabSupabase } from './config/PrecioBaseTabSupabase';
 import { PrecioUsuarioTabSupabase } from './config/PrecioUsuarioTabSupabase';
 import { AsignacionConsultorioTabSupabase } from './config/AsignacionConsultorioTabSupabase';
+import { EspecialidadTabSupabase } from './config/EspecialidadTabSupabase';
 
 export function ConfiguracionesViewSupabase() {
   const [tabActiva, setTabActiva] = useState('compania');
@@ -25,6 +26,7 @@ export function ConfiguracionesViewSupabase() {
     { value: 'usuario', label: 'Usuarios', icon: Users },
     { value: 'usuario-sucursal', label: 'Asignaciones', icon: UserCog },
     { value: 'asignacion-consultorio', label: 'Horarios', icon: CalendarClock },
+    { value: 'especialidad', label: 'Especialidades', icon: Stethoscope }, // Requiere importar Stethoscope de lucide-react
     { value: 'precio-base', label: 'Precios Base', icon: Tag },
     { value: 'precio-usuario', label: 'Precios Usuario', icon: DollarSign },
   ];
@@ -110,6 +112,10 @@ export function ConfiguracionesViewSupabase() {
 
         <TabsContent value="asignacion-consultorio">
           <AsignacionConsultorioTabSupabase />
+        </TabsContent>
+
+        <TabsContent value="especialidad">
+          <EspecialidadTabSupabase />
         </TabsContent>
 
         <TabsContent value="precio-base">

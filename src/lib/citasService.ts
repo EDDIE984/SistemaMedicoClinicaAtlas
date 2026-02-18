@@ -8,9 +8,11 @@ import { supabaseAdmin } from './supabase';  // ⚡ Cambio: usar supabaseAdmin p
 export interface Cita {
   id_cita: number;
   id_paciente: number;
+  id_especialidad: number;
   id_usuario_sucursal: number;
   id_sucursal: number;
   id_consultorio: number;
+  id_aseguradora?: number;
   fecha_cita: string;  // Cambio: era "fecha"
   hora_inicio: string;
   hora_fin: string;
@@ -22,6 +24,7 @@ export interface Cita {
   precio_cita: number;  // Cambio: era "precio"
   forma_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro';
   estado_pago?: 'pendiente' | 'pagado' | 'parcial';
+  referencia?: string;
   created_at?: string;
   cancelada_por?: number;
   motivo_cancelacion?: string;
@@ -37,6 +40,10 @@ export interface CitaCompleta extends Cita {
     email: string | null;  // Cambio: era "correo"
     fecha_nacimiento: string;
     sexo: string;
+  };
+  aseguradora?: {
+    id_aseguradora: number;
+    nombre: string;
   };
   usuario_sucursal: {
     id_usuario_sucursal: number;
@@ -113,6 +120,10 @@ export async function getCitasByPaciente(idPaciente: number): Promise<CitaComple
           fecha_nacimiento,
           sexo
         ),
+        aseguradora (
+          id_aseguradora,
+          nombre
+        ),
         usuario_sucursal:usuario_sucursal!inner (
           id_usuario_sucursal,
           especialidad,
@@ -171,8 +182,8 @@ export async function getCitasByUsuarioYFechas(
       idSucursal ? `en sucursal ${idSucursal}` : 'en todas las sucursales');
 
     // Primero obtener las asignaciones del usuario
-    let query = supabaseAdmin
-      .from('usuario_sucursal')
+    let query = (supabaseAdmin
+      .from('usuario_sucursal') as any)
       .select('id_usuario_sucursal')
       .eq('id_usuario', idUsuario)
       .eq('estado', 'activo');
@@ -194,7 +205,7 @@ export async function getCitasByUsuarioYFechas(
       return [];
     }
 
-    const idsAsignaciones = asignaciones.map(a => a.id_usuario_sucursal);
+    const idsAsignaciones = asignaciones.map((a: any) => a.id_usuario_sucursal);
 
     // Obtener citas con relaciones
     const { data, error } = await supabaseAdmin
@@ -210,6 +221,10 @@ export async function getCitasByUsuarioYFechas(
           email,
           fecha_nacimiento,
           sexo
+        ),
+        aseguradora (
+          id_aseguradora,
+          nombre
         ),
         usuario_sucursal:usuario_sucursal!inner (
           id_usuario_sucursal,
@@ -281,6 +296,10 @@ export async function getCitasBySucursalYFechas(
           fecha_nacimiento,
           sexo
         ),
+        aseguradora (
+          id_aseguradora,
+          nombre
+        ),
         usuario_sucursal:usuario_sucursal!inner (
           id_usuario_sucursal,
           especialidad,
@@ -329,8 +348,8 @@ export async function getCitasBySucursalYFechas(
  */
 export async function createCita(cita: Omit<Cita, 'id_cita' | 'created_at' | 'consulta_realizada'>): Promise<Cita | null> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('cita')
+    const { data, error } = await (supabaseAdmin
+      .from('cita') as any)
       .insert({
         ...cita,
         consulta_realizada: false
@@ -366,8 +385,8 @@ export async function updateCita(
     // Si se está actualizando el estado, obtener el estado anterior
     let estadoAnterior: string | undefined;
     if (updates.estado_cita && idUsuario) {
-      const { data: citaActual, error: errorObtener } = await supabaseAdmin
-        .from('cita')
+      const { data: citaActual, error: errorObtener } = await (supabaseAdmin
+        .from('cita') as any)
         .select('estado_cita')
         .eq('id_cita', idCita)
         .maybeSingle(); // Cambiado de .single() a .maybeSingle()
@@ -377,8 +396,8 @@ export async function updateCita(
       }
     }
 
-    const { error } = await supabaseAdmin
-      .from('cita')
+    const { error } = await (supabaseAdmin
+      .from('cita') as any)
       .update(updates)
       .eq('id_cita', idCita);
 
@@ -389,15 +408,15 @@ export async function updateCita(
 
     // Si se actualizó el estado y tenemos el idUsuario, crear registro de historial
     if (updates.estado_cita && idUsuario && estadoAnterior) {
-      const { error: errorHistorial } = await supabaseAdmin
-        .from('historial_estado_cita')
+      const { error: errorHistorial } = await (supabaseAdmin
+        .from('historial_estado_cita' as any) as any)
         .insert({
           id_cita: idCita,
           estado_anterior: estadoAnterior,
           estado_nuevo: updates.estado_cita,
           id_usuario_cambio: idUsuario,
           observaciones: motivoCambio || 'Actualización de cita'
-        });
+        } as any);
 
       if (errorHistorial) {
         console.error('⚠️ Error al crear historial de estado:', errorHistorial);
@@ -425,8 +444,8 @@ export async function cancelarCita(
     console.log('🗑️ Cancelando cita ID:', idCita);
 
     // PASO 1: Obtener el estado actual ANTES de cancelar
-    const { data: citaActual, error: errorObtener } = await supabaseAdmin
-      .from('cita')
+    const { data: citaActual, error: errorObtener } = await (supabaseAdmin
+      .from('cita') as any)
       .select('estado_cita')
       .eq('id_cita', idCita)
       .maybeSingle(); // Cambiado de .single() a .maybeSingle()
@@ -439,8 +458,8 @@ export async function cancelarCita(
     const estadoAnterior = citaActual.estado_cita;
 
     // PASO 2: Actualizar estado de la cita con los datos de cancelación
-    const { error: errorCita } = await supabaseAdmin
-      .from('cita')
+    const { error: errorCita } = await (supabaseAdmin
+      .from('cita') as any)
       .update({
         estado_cita: 'cancelada',
         cancelada_por: idUsuarioCancelo,
@@ -454,15 +473,15 @@ export async function cancelarCita(
     }
 
     // PASO 3: Crear registro en historial de estados
-    const { error: errorHistorial } = await supabaseAdmin
-      .from('historial_estado_cita')
+    const { error: errorHistorial } = await (supabaseAdmin
+      .from('historial_estado_cita' as any) as any)
       .insert({
         id_cita: idCita,
         estado_anterior: estadoAnterior,
         estado_nuevo: 'cancelada',
         id_usuario_cambio: idUsuarioCancelo,
         observaciones: motivoCancelacion
-      });
+      } as any);
 
     if (errorHistorial) {
       // Verificar si es error de duplicado (trigger ya lo insertó)
@@ -489,8 +508,8 @@ export async function marcarCitaCompletada(idCita: number, idUsuario: number): P
     console.log('✅ Marcando cita como completada:', idCita, 'Usuario:', idUsuario);
 
     // PASO 1: Obtener el estado actual ANTES de actualizar
-    const { data: citaActual, error: errorObtener } = await supabaseAdmin
-      .from('cita')
+    const { data: citaActual, error: errorObtener } = await (supabaseAdmin
+      .from('cita') as any)
       .select('estado_cita')
       .eq('id_cita', idCita)
       .maybeSingle(); // Cambiado de .single() a .maybeSingle()
@@ -509,8 +528,8 @@ export async function marcarCitaCompletada(idCita: number, idUsuario: number): P
     console.log('📋 Estado anterior:', estadoAnterior);
 
     // PASO 2: Actualizar la cita (esto puede activar el trigger)
-    const { error: errorUpdate } = await supabaseAdmin
-      .from('cita')
+    const { error: errorUpdate } = await (supabaseAdmin
+      .from('cita') as any)
       .update({
         estado_cita: 'atendida',
         consulta_realizada: true
@@ -524,15 +543,15 @@ export async function marcarCitaCompletada(idCita: number, idUsuario: number): P
         console.log('⚠️ Detectado trigger automático que causa error, insertando manualmente...');
 
         // Insertar manualmente en el historial
-        const { error: errorHistorial } = await supabaseAdmin
-          .from('historial_estado_cita')
+        const { error: errorHistorial } = await (supabaseAdmin
+          .from('historial_estado_cita' as any) as any)
           .insert({
             id_cita: idCita,
             estado_anterior: estadoAnterior,
             estado_nuevo: 'atendida',
             id_usuario_cambio: idUsuario,
             observaciones: 'Consulta médica completada'
-          });
+          } as any);
 
         if (errorHistorial) {
           console.error('❌ Error al insertar en historial:', errorHistorial);
@@ -542,15 +561,15 @@ export async function marcarCitaCompletada(idCita: number, idUsuario: number): P
     }
 
     // PASO 3: Insertar en historial manualmente (si el trigger no lo hizo)
-    const { error: errorHistorial } = await supabaseAdmin
-      .from('historial_estado_cita')
+    const { error: errorHistorial } = await (supabaseAdmin
+      .from('historial_estado_cita' as any) as any)
       .insert({
         id_cita: idCita,
         estado_anterior: estadoAnterior,
         estado_nuevo: 'atendida',
         id_usuario_cambio: idUsuario,
         observaciones: 'Consulta médica completada'
-      });
+      } as any);
 
     if (errorHistorial) {
       // Verificar si el error es porque ya existe (trigger lo insertó)
@@ -577,8 +596,8 @@ export async function marcarCitaCompletada(idCita: number, idUsuario: number): P
  */
 export async function getCancelacionByCita(idCita: number): Promise<Cancelacion | null> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('cita')
+    const { data, error } = await (supabaseAdmin
+      .from('cita') as any)
       .select('id_cita, cancelada_por, motivo_cancelacion, created_at')
       .eq('id_cita', idCita)
       .eq('estado_cita', 'cancelada')
@@ -621,8 +640,8 @@ export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promi
     console.log('💰 Buscando precio para id_usuario_sucursal:', idUsuarioSucursal);
 
     // 1. Buscar precio personalizado del usuario
-    const { data: precioUsuario, error: errorPrecioUsuario } = await supabaseAdmin
-      .from('precio_usuario_sucursal')
+    const { data: precioUsuario, error: errorPrecioUsuario } = await (supabaseAdmin
+      .from('precio_usuario_sucursal') as any)
       .select('precio_consulta')
       .eq('id_usuario_sucursal', idUsuarioSucursal)
       .eq('estado', 'activo')
@@ -641,8 +660,8 @@ export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promi
     console.log('⚠️ No hay precio personalizado, buscando precio base por especialidad...');
 
     // 2. Si no hay precio personalizado, obtener especialidad del usuario y la compañía
-    const { data: usuarioSucursal, error: errorUsuarioSucursal } = await supabaseAdmin
-      .from('usuario_sucursal')
+    const { data: usuarioSucursal, error: errorUsuarioSucursal } = await (supabaseAdmin
+      .from('usuario_sucursal') as any)
       .select(`
         especialidad,
         sucursal:sucursal!inner (
@@ -661,8 +680,8 @@ export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promi
     console.log('🏢 Compañía:', (usuarioSucursal as any).sucursal?.id_compania);
 
     // 3. Buscar precio base de la especialidad en la compañía
-    const { data: precioBase, error: errorPrecioBase } = await supabaseAdmin
-      .from('precio_base_especialidad')
+    const { data: precioBase, error: errorPrecioBase } = await (supabaseAdmin
+      .from('precio_base_especialidad') as any)
       .select('precio_consulta')
       .eq('especialidad', usuarioSucursal.especialidad)
       .eq('id_compania', (usuarioSucursal as any).sucursal?.id_compania)
@@ -692,8 +711,8 @@ export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promi
  */
 export async function getDiasSemanaUsuarioSucursal(idUsuarioSucursal: number): Promise<DiaSemana[]> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('asignacion_consultorio')
+    const { data, error } = await (supabaseAdmin
+      .from('asignacion_consultorio') as any)
       .select('*')
       .eq('id_usuario_sucursal', idUsuarioSucursal)
       .eq('estado', 'activo')

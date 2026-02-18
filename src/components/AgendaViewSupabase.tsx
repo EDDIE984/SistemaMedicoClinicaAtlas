@@ -21,6 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { Input } from './ui/input';
+
+// Helper para formatear fecha local YYYY-MM-DD
+const formatDateLocal = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 interface AgendaViewProps {
   currentUser?: {
@@ -48,6 +57,8 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     return localStorage.getItem('currentSucursalId') || '';
   });
   const [filterMedico, setFilterMedico] = useState<string>('all');
+  const [filterFechaDesde, setFilterFechaDesde] = useState<string>(formatDateLocal(new Date()));
+  const [filterFechaHasta, setFilterFechaHasta] = useState<string>(formatDateLocal(new Date()));
 
   // Obtener el ID del usuario desde localStorage
   useEffect(() => {
@@ -100,13 +111,6 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     cargarMedicos();
   }, [filterSucursal]);
 
-  // Helper para formatear fecha local YYYY-MM-DD
-  const formatDateLocal = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   // Calcular rango de fechas para la semana actual
   const getWeekRange = (date: Date) => {
@@ -124,7 +128,10 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     };
   };
 
-  const { inicio, fin } = getWeekRange(currentWeek);
+  const { inicio, fin } = vistaActual === 'semana'
+    ? getWeekRange(currentWeek)
+    : { inicio: filterFechaDesde, fin: filterFechaHasta };
+
   const { citas, isLoading, loadCitas, marcarCompletada } = useCitas(
     idUsuarioActual,
     inicio,
@@ -243,7 +250,7 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
         {citasFiltradas.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <FileText className="size-12 mx-auto mb-3 text-gray-300" />
-            <p>No hay citas programadas para esta semana</p>
+            <p>No hay citas programadas para el rango seleccionado</p>
           </div>
         )}
 
@@ -389,89 +396,51 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
     <div className="h-full p-6 space-y-4">
       <SupabaseIndicator />
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header Row: Navigation and Main Actions */}
+      <div className="flex items-center justify-between bg-white p-2 rounded-xl border shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handlePreviousWeek}>
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <Button variant="ghost" size="sm" onClick={handlePreviousWeek} className="h-8 w-8 p-0 hover:bg-white hover:shadow-sm">
               <ChevronLeft className="size-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={handleToday}>
+            <Button variant="ghost" size="sm" onClick={handleToday} className="h-8 px-3 text-xs font-medium hover:bg-white hover:shadow-sm">
               Hoy
             </Button>
-            <Button variant="outline" size="sm" onClick={handleNextWeek}>
+            <Button variant="ghost" size="sm" onClick={handleNextWeek} className="h-8 w-8 p-0 hover:bg-white hover:shadow-sm">
               <ChevronRight className="size-4" />
             </Button>
           </div>
 
-          <div className="text-lg font-semibold">
-            {weekDays[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+          <div className="text-lg font-bold text-gray-800 tracking-tight">
+            {weekDays[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase()}
           </div>
 
           {/* Indicador de sucursal activa */}
           {nombreSucursal && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
-              <MapPin className="size-4 text-blue-600" />
-              <span className="text-sm text-blue-700">
-                <span className="font-medium">Sucursal:</span> {nombreSucursal}
+            <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full">
+              <MapPin className="size-3 text-blue-600" />
+              <span className="text-[11px] text-blue-700 font-semibold uppercase">
+                {nombreSucursal}
               </span>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Filtro Sucursal */}
-          <Select value={filterSucursal} onValueChange={setFilterSucursal}>
-            <SelectTrigger className="w-[180px] h-9">
-              <SelectValue placeholder="Seleccione sucursal" />
-            </SelectTrigger>
-            <SelectContent>
-              {sucursales.map((sucursal) => (
-                <SelectItem key={sucursal.id_sucursal} value={sucursal.id_sucursal.toString()}>
-                  {sucursal.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Filtro Médico */}
-          <Select value={filterMedico} onValueChange={setFilterMedico}>
-            <SelectTrigger className="w-[180px] h-9">
-              <SelectValue placeholder="Todos los médicos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los médicos</SelectItem>
-              {medicos.map((medico) => (
-                <SelectItem key={medico.usuario?.id_usuario} value={medico.usuario?.id_usuario.toString()}>
-                  {medico.usuario?.nombre} {medico.usuario?.apellido}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="mostrar-canceladas"
-              checked={mostrarCanceladas}
-              onCheckedChange={(checked: boolean) => setMostrarCanceladas(checked)}
-            />
-            <label htmlFor="mostrar-canceladas" className="text-sm cursor-pointer whitespace-nowrap">
-              Mostrar canceladas
-            </label>
-          </div>
-
-          <div className="flex gap-2">
+          <div className="flex bg-gray-100 p-1 rounded-lg">
             <Button
-              variant={vistaActual === 'semana' ? 'default' : 'outline'}
+              variant={vistaActual === 'semana' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setVistaActual('semana')}
+              className={`h-8 px-4 text-xs font-medium transition-all ${vistaActual === 'semana' ? 'bg-white shadow-sm' : ''}`}
             >
               Semana
             </Button>
             <Button
-              variant={vistaActual === 'lista' ? 'default' : 'outline'}
+              variant={vistaActual === 'lista' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setVistaActual('lista')}
+              className={`h-8 px-4 text-xs font-medium transition-all ${vistaActual === 'lista' ? 'bg-white shadow-sm' : ''}`}
             >
               Lista
             </Button>
@@ -479,11 +448,91 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
 
           <Button
             onClick={() => setIsAgendarModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 h-9 px-4 shadow-sm shadow-blue-200"
           >
             <Plus className="size-4 mr-2" />
             Nueva Cita
           </Button>
+        </div>
+      </div>
+
+      {/* Filter Bar Row: Refined and Professional */}
+      <div className="flex items-center flex-wrap gap-4 px-4 py-3 bg-gray-50/50 rounded-xl border border-dashed">
+        <div className="flex items-center gap-4 flex-1 flex-wrap">
+          {/* Sucursal Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sucursal:</span>
+            <Select value={filterSucursal} onValueChange={setFilterSucursal}>
+              <SelectTrigger className="w-[180px] h-8 text-xs bg-white border-gray-200">
+                <SelectValue placeholder="Seleccione sucursal" />
+              </SelectTrigger>
+              <SelectContent>
+                {sucursales.map((sucursal) => (
+                  <SelectItem key={sucursal.id_sucursal} value={sucursal.id_sucursal.toString()}>
+                    {sucursal.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Médico Filter */}
+          <div className="flex items-center gap-2 border-l pl-4 border-gray-200">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Médico:</span>
+            <Select value={filterMedico} onValueChange={setFilterMedico}>
+              <SelectTrigger className="w-[180px] h-8 text-xs bg-white border-gray-200">
+                <SelectValue placeholder="Todos los médicos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los médicos</SelectItem>
+                {medicos.map((medico) => (
+                  <SelectItem key={medico.usuario?.id_usuario} value={medico.usuario?.id_usuario.toString()}>
+                    {medico.usuario?.nombre} {medico.usuario?.apellido}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date Range Filters (Only in List View) - Enhanced Design */}
+          {vistaActual === 'lista' && (
+            <div className="flex items-center gap-2 border-l pl-4 border-gray-200 animate-in fade-in slide-in-from-left-2 duration-300">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rango:</span>
+              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
+                <div className="flex items-center gap-1 px-2 border-r">
+                  <Calendar className="size-3 text-gray-400" />
+                  <Input
+                    type="date"
+                    value={filterFechaDesde}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterFechaDesde(e.target.value)}
+                    className="h-7 w-[120px] text-[11px] border-none focus-visible:ring-0 p-0"
+                  />
+                </div>
+                <div className="flex items-center gap-1 px-2">
+                  <Calendar className="size-3 text-gray-400" />
+                  <Input
+                    type="date"
+                    value={filterFechaHasta}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterFechaHasta(e.target.value)}
+                    className="h-7 w-[120px] text-[11px] border-none focus-visible:ring-0 p-0"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
+          <Checkbox
+            id="mostrar-canceladas"
+            checked={mostrarCanceladas}
+            onCheckedChange={(checked: boolean) => setMostrarCanceladas(checked)}
+            className="data-[state=checked]:bg-blue-600"
+          />
+          <label htmlFor="mostrar-canceladas" className="text-[11px] font-semibold text-gray-600 cursor-pointer uppercase tracking-tight">
+            Ver canceladas
+          </label>
         </div>
       </div>
 
