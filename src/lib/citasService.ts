@@ -25,6 +25,7 @@ export interface Cita {
   forma_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'seguro';
   estado_pago?: 'pendiente' | 'pagado' | 'parcial';
   referencia?: string;
+  origen_agendamiento?: 'SISTEMA' | 'CHATBOT';
   created_at?: string;
   cancelada_por?: number;
   motivo_cancelacion?: string;
@@ -352,6 +353,7 @@ export async function createCita(cita: Omit<Cita, 'id_cita' | 'created_at' | 'co
       .from('cita') as any)
       .insert({
         ...cita,
+        origen_agendamiento: cita.origen_agendamiento || 'SISTEMA',
         consulta_realizada: false
       })
       .select()

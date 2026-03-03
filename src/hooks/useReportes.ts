@@ -32,7 +32,13 @@ import {
   type DistribucionReferencia
 } from '../lib/reportesService';
 
-export function useCitasDashboard(fechaInicio: string, fechaFin: string, idSucursal?: number, idEspecialidad?: number) {
+export function useCitasDashboard(
+  fechaInicio: string,
+  fechaFin: string,
+  idSucursal?: number,
+  idEspecialidad?: number,
+  origenAgendamiento?: 'SISTEMA' | 'CHATBOT'
+) {
   const [stats, setStats] = useState<EstadisticasGenerales | null>(null);
   const [citasDia, setCitasDia] = useState<CitasPorDia[]>([]);
   const [citasEsp, setCitasEsp] = useState<CitasPorEspecialidad[]>([]);
@@ -50,17 +56,17 @@ export function useCitasDashboard(fechaInicio: string, fechaFin: string, idSucur
     setIsLoading(true);
     try {
       const [s, c, esp, a, t, f, ep, h, d, r, m] = await Promise.all([
-        getEstadisticasGenerales(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad),
-        getCitasPorDia(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad),
-        getCitasPorEspecialidad(idSucursal, fechaInicio, fechaFin),
-        getDistribucionAseguradora(fechaInicio, fechaFin, idSucursal, idEspecialidad),
-        getDistribucionTipoCita(fechaInicio, fechaFin, idSucursal),
-        getDistribucionFormaPago(fechaInicio, fechaFin, idSucursal),
-        getDistribucionEstadoPago(fechaInicio, fechaFin, idSucursal),
-        getCitasPorHora(fechaInicio, fechaFin, idSucursal),
-        getDuracionPromedioPorTipo(fechaInicio, fechaFin, idSucursal),
-        getDistribucionReferencia(fechaInicio, fechaFin, idSucursal),
-        getEstadisticasPorMedico(fechaInicio, fechaFin)
+        getEstadisticasGenerales(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad, origenAgendamiento),
+        getCitasPorDia(fechaInicio, fechaFin, idSucursal, undefined, idEspecialidad, origenAgendamiento),
+        getCitasPorEspecialidad(idSucursal, fechaInicio, fechaFin, origenAgendamiento),
+        getDistribucionAseguradora(fechaInicio, fechaFin, idSucursal, idEspecialidad, origenAgendamiento),
+        getDistribucionTipoCita(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getDistribucionFormaPago(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getDistribucionEstadoPago(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getCitasPorHora(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getDuracionPromedioPorTipo(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getDistribucionReferencia(fechaInicio, fechaFin, idSucursal, origenAgendamiento),
+        getEstadisticasPorMedico(fechaInicio, fechaFin, origenAgendamiento)
       ]);
 
       setStats(s);
@@ -82,7 +88,7 @@ export function useCitasDashboard(fechaInicio: string, fechaFin: string, idSucur
 
   useEffect(() => {
     loadAll();
-  }, [fechaInicio, fechaFin, idSucursal, idEspecialidad]);
+  }, [fechaInicio, fechaFin, idSucursal, idEspecialidad, origenAgendamiento]);
 
   return {
     stats, citasDia, citasEsp, distAseguradora, distTipo,

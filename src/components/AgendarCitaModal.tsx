@@ -200,33 +200,37 @@ export function AgendarCitaModal({
   }, [citaData.id_usuario_sucursal, citaData.fecha_cita]);
 
   const handlePacienteNext = () => {
+    const camposPacienteFaltantes: string[] = [];
+
     if (!isNewPatient && !selectedPacienteId) {
-      toast.error('Por favor selecciona un paciente');
-      return;
+      camposPacienteFaltantes.push('Paciente');
     }
 
     if (isNewPatient) {
-      if (!newPaciente.nombres || !newPaciente.apellidos || !newPaciente.numero_identificacion) {
-        toast.error('Por favor completa los campos obligatorios del paciente');
-        return;
-      }
+      if (!newPaciente.nombres.trim()) camposPacienteFaltantes.push('Nombres');
+      if (!newPaciente.apellidos.trim()) camposPacienteFaltantes.push('Apellidos');
+      if (!newPaciente.numero_identificacion.trim()) camposPacienteFaltantes.push('Identificación');
+    }
+
+    if (camposPacienteFaltantes.length > 0) {
+      toast.error(`Por favor complete los campos obligatorios: ${camposPacienteFaltantes.join(', ')}`);
+      return;
     }
 
     setStep('cita');
   };
 
   const handleSubmit = () => {
-    // Validaciones
-    if (!citaData.id_usuario_sucursal) {
-      toast.error('Por favor selecciona una sucursal');
-      return;
-    }
-    if (!citaData.fecha_cita || !citaData.hora_inicio) {
-      toast.error('Por favor completa la fecha y hora de la cita');
-      return;
-    }
-    if (!citaData.motivo_consulta) {
-      toast.error('Por favor ingresa el motivo de la consulta');
+    const camposFaltantes: string[] = [];
+
+    if (!selectedPacienteId && !isNewPatient) camposFaltantes.push('Paciente');
+    if (!citaData.id_usuario_sucursal) camposFaltantes.push('Sucursal');
+    if (!citaData.fecha_cita) camposFaltantes.push('Fecha');
+    if (!citaData.hora_inicio) camposFaltantes.push('Hora de inicio');
+    if (!citaData.motivo_consulta.trim()) camposFaltantes.push('Motivo de consulta');
+
+    if (camposFaltantes.length > 0) {
+      toast.error(`Por favor complete los campos obligatorios: ${camposFaltantes.join(', ')}`);
       return;
     }
 

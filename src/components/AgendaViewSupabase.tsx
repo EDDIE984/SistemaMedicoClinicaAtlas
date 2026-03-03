@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { ChevronLeft, ChevronRight, Plus, Clock, User, Phone, Mail, FileText, XCircle, Stethoscope, Loader2, Calendar, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock, User, Phone, Mail, FileText, XCircle, Stethoscope, Loader2, Calendar, MapPin, RefreshCw } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useCitas } from '../hooks/useCitas';
@@ -59,6 +59,37 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
   const [filterMedico, setFilterMedico] = useState<string>('all');
   const [filterFechaDesde, setFilterFechaDesde] = useState<string>(formatDateLocal(new Date()));
   const [filterFechaHasta, setFilterFechaHasta] = useState<string>(formatDateLocal(new Date()));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const cargarSucursales = async () => {
+    const companiaId = localStorage.getItem('currentCompaniaId');
+    if (companiaId) {
+      const data: any[] = await getSucursalesByCompania(parseInt(companiaId));
+      setSucursales(data);
+
+      if (!filterSucursal && data.length > 0) {
+        const defaultSucursalId = localStorage.getItem('currentSucursalId');
+        if (defaultSucursalId && data.some(s => s.id_sucursal.toString() === defaultSucursalId)) {
+          setFilterSucursal(defaultSucursalId);
+        } else {
+          setFilterSucursal(data[0].id_sucursal.toString());
+        }
+      }
+    }
+  };
+
+  const cargarMedicos = async (sucursalSeleccionada: string, resetFiltroMedico = true) => {
+    if (sucursalSeleccionada && sucursalSeleccionada !== 'all') {
+      const data = await getMedicosBySucursal(parseInt(sucursalSeleccionada));
+      setMedicos(data);
+    } else {
+      setMedicos([]);
+    }
+
+    if (resetFiltroMedico) {
+      setFilterMedico('all');
+    }
+  };
 
   // Obtener el ID del usuario desde localStorage
   useEffect(() => {
@@ -77,39 +108,30 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
 
   // Cargar sucursales al inicio
   useEffect(() => {
-    const cargarSucursales = async () => {
-      const companiaId = localStorage.getItem('currentCompaniaId');
-      if (companiaId) {
-        const data: any[] = await getSucursalesByCompania(parseInt(companiaId));
-        setSucursales(data);
-
-        // Si no hay sucursal seleccionada y hay datos, seleccionar la primera o la almacenada
-        if (!filterSucursal && data.length > 0) {
-          const defaultSucursalId = localStorage.getItem('currentSucursalId');
-          if (defaultSucursalId && data.some(s => s.id_sucursal.toString() === defaultSucursalId)) {
-            setFilterSucursal(defaultSucursalId);
-          } else {
-            setFilterSucursal(data[0].id_sucursal.toString());
-          }
-        }
-      }
-    };
     cargarSucursales();
   }, []);
 
   // Cargar médicos cuando cambia la sucursal seleccionada
   useEffect(() => {
-    const cargarMedicos = async () => {
-      if (filterSucursal && filterSucursal !== 'all') {
-        const data = await getMedicosBySucursal(parseInt(filterSucursal));
-        setMedicos(data);
-      } else {
-        setMedicos([]); // Opcional: cargar todos los médicos de la compañía si se requieren
-      }
-      setFilterMedico('all'); // Resetear filtro de médico
-    };
-    cargarMedicos();
+    cargarMedicos(filterSucursal, true);
   }, [filterSucursal]);
+
+  const handleRefreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        loadCitas(),
+        cargarSucursales(),
+        cargarMedicos(filterSucursal, false)
+      ]);
+      toast.success('Datos actualizados correctamente');
+    } catch (error) {
+      console.error('Error al refrescar agenda:', error);
+      toast.error('No se pudo actualizar la información');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
 
   // Calcular rango de fechas para la semana actual
@@ -362,6 +384,9 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
                         <div className="text-[10px] text-gray-500 font-medium truncate">
                           Dr. {cita.usuario_sucursal.usuario.apellido.split(' ')[0]}
                         </div>
+                        <div className="text-[10px] text-gray-500 truncate">
+                          {cita.usuario_sucursal.especialidad || 'Especialidad no definida'}
+                        </div>
                         <div className="font-medium truncate text-gray-900">
                           {cita.paciente.nombres.split(' ')[0]} {cita.paciente.apellidos.split(' ')[0]}
                         </div>
@@ -453,6 +478,16 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
           >
             <Plus className="size-4 mr-2" />
             Nueva Cita
+          </Button>
+          <Button
+            onClick={handleRefreshData}
+            size="sm"
+            variant="outline"
+            className="h-9 px-4"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`size-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Actualizar
           </Button>
         </div>
       </div>

@@ -599,8 +599,18 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
 
   // Manejar envío del formulario
   const handleSubmit = async () => {
-    if (!selectedAsignacion || !fecha || !horaInicio || !motivoConsulta || !referencia || !idAseguradora) {
-      toast.error('Por favor complete todos los campos obligatorios');
+    const camposFaltantes: string[] = [];
+
+    if (!selectedPacienteId) camposFaltantes.push('Paciente');
+    if (!selectedAsignacion) camposFaltantes.push(esSecretaria ? 'Médico' : 'Sucursal');
+    if (!fecha) camposFaltantes.push('Fecha');
+    if (!horaInicio) camposFaltantes.push('Hora de inicio');
+    if (!motivoConsulta.trim()) camposFaltantes.push('Motivo de consulta');
+    if (!idAseguradora) camposFaltantes.push('Aseguradora');
+    if (!referencia) camposFaltantes.push('Referencia');
+
+    if (camposFaltantes.length > 0) {
+      toast.error(`Por favor complete los campos obligatorios: ${camposFaltantes.join(', ')}`);
       return;
     }
 
@@ -647,12 +657,13 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
       } else {
         // MODO CREACIÓN
         // Obtener id_sucursal de la asignación seleccionada
-        const asignacionSeleccionada = asignaciones.find(
+        const asignacionesFuente = esSecretaria ? medicosDisponibles : asignaciones;
+        const asignacionSeleccionada = asignacionesFuente.find(
           a => a.id_usuario_sucursal === parseInt(selectedAsignacion)
         );
 
         if (!asignacionSeleccionada) {
-          toast.error('Error: No se encontró la asignación seleccionada');
+          toast.error('Error: No se encontró la asignación seleccionada. Seleccione nuevamente el médico/sucursal.');
           setIsLoading(false);
           return;
         }
@@ -865,7 +876,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <Label>Cédula *</Label>
+                    <Label>Cédula/Pasaporte *</Label>
                     {isSearchingCedula && <span className="text-xs text-blue-600 flex items-center"><Loader2 className="size-3 animate-spin mr-1" /> Buscando...</span>}
                   </div>
                   <Input

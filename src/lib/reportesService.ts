@@ -113,6 +113,8 @@ export interface UpcomingAppointment {
   sucursal: string;
 }
 
+export type OrigenAgendamiento = 'SISTEMA' | 'CHATBOT';
+
 // ========================================
 // FUNCIONES DE ESTADÍSTICAS GENERALES
 // ========================================
@@ -125,7 +127,8 @@ export async function getEstadisticasGenerales(
   fechaFin?: string,
   idSucursal?: number,
   idMedico?: number,
-  idEspecialidad?: number
+  idEspecialidad?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<EstadisticasGenerales> {
   try {
     console.log('📊 Calculando estadísticas generales...');
@@ -164,6 +167,9 @@ export async function getEstadisticasGenerales(
     }
     if (idEspecialidad) {
       queryCitas = queryCitas.eq('id_especialidad', idEspecialidad);
+    }
+    if (origenAgendamiento) {
+      queryCitas = queryCitas.eq('origen_agendamiento', origenAgendamiento);
     }
 
     const { data: citas, error } = await queryCitas;
@@ -255,7 +261,8 @@ export async function getCitasPorDia(
   fechaFin: string,
   idSucursal?: number,
   idMedico?: number,
-  idEspecialidad?: number
+  idEspecialidad?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<CitasPorDia[]> {
   try {
     let query = supabaseAdmin
@@ -272,6 +279,9 @@ export async function getCitasPorDia(
     }
     if (idEspecialidad) {
       query = query.eq('id_especialidad', idEspecialidad);
+    }
+    if (origenAgendamiento) {
+      query = query.eq('origen_agendamiento', origenAgendamiento);
     }
 
     const { data, error } = await query.order('fecha_cita', { ascending: true });
@@ -358,7 +368,8 @@ export async function getIngresosPorDia(
  */
 export async function getEstadisticasPorMedico(
   fechaInicio?: string,
-  fechaFin?: string
+  fechaFin?: string,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<EstadisticasPorMedico[]> {
   try {
     let query = supabaseAdmin
@@ -381,6 +392,7 @@ export async function getEstadisticasPorMedico(
 
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) return [];
@@ -490,7 +502,8 @@ export async function getTopPacientes(
 export async function getCitasPorEspecialidad(
   idSucursal?: number,
   fechaInicio?: string,
-  fechaFin?: string
+  fechaFin?: string,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<CitasPorEspecialidad[]> {
   try {
     let query = supabaseAdmin
@@ -503,6 +516,7 @@ export async function getCitasPorEspecialidad(
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -530,7 +544,8 @@ export async function getDistribucionAseguradora(
   fechaInicio?: string,
   fechaFin?: string,
   idSucursal?: number,
-  idEspecialidad?: number
+  idEspecialidad?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DistribucionAseguradora[]> {
   try {
     let query = supabaseAdmin
@@ -544,6 +559,7 @@ export async function getDistribucionAseguradora(
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
     if (idEspecialidad) query = query.eq('id_especialidad', idEspecialidad);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -570,13 +586,15 @@ export async function getDistribucionAseguradora(
 export async function getDistribucionTipoCita(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DistribucionTipoCita[]> {
   try {
     let query = supabaseAdmin.from('cita').select('tipo_cita');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -597,13 +615,15 @@ export async function getDistribucionTipoCita(
 export async function getDistribucionFormaPago(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DistribucionFormaPago[]> {
   try {
     let query = supabaseAdmin.from('cita').select('forma_pago');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -624,13 +644,15 @@ export async function getDistribucionFormaPago(
 export async function getDistribucionEstadoPago(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DistribucionEstadoPago[]> {
   try {
     let query = supabaseAdmin.from('cita').select('estado_pago');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -651,13 +673,15 @@ export async function getDistribucionEstadoPago(
 export async function getCitasPorHora(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<CitasPorHora[]> {
   try {
     let query = supabaseAdmin.from('cita').select('hora_inicio');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -678,13 +702,15 @@ export async function getCitasPorHora(
 export async function getDuracionPromedioPorTipo(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DuracionPromedio[]> {
   try {
     let query = supabaseAdmin.from('cita').select('tipo_cita, duracion_minutos');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -710,19 +736,41 @@ export interface DistribucionReferencia {
   color?: string;
 }
 
+export interface CitaDashboardExport {
+  idCita: number;
+  fecha: string;
+  horaInicio: string;
+  horaFin: string;
+  paciente: string;
+  cedula: string;
+  medico: string;
+  sucursal: string;
+  especialidad: string;
+  tipoCita: string;
+  estadoCita: string;
+  aseguradora: string;
+  referencia: string;
+  precio: number;
+  estadoPago: string;
+  formaPago: string;
+  consultaRealizada: string;
+}
+
 /**
  * Distribución por Referencia
  */
 export async function getDistribucionReferencia(
   fechaInicio?: string,
   fechaFin?: string,
-  idSucursal?: number
+  idSucursal?: number,
+  origenAgendamiento?: OrigenAgendamiento
 ): Promise<DistribucionReferencia[]> {
   try {
     let query = supabaseAdmin.from('cita').select('referencia');
     if (fechaInicio) query = query.gte('fecha_cita', fechaInicio);
     if (fechaFin) query = query.lte('fecha_cita', fechaFin);
     if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -735,6 +783,104 @@ export async function getDistribucionReferencia(
 
     return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
   } catch (error) { return []; }
+}
+
+/**
+ * Obtener detalle de citas para exportación del dashboard
+ */
+export async function getCitasDashboardExport(
+  fechaInicio: string,
+  fechaFin: string,
+  idSucursal?: number,
+  idEspecialidad?: number,
+  origenAgendamiento?: OrigenAgendamiento
+): Promise<CitaDashboardExport[]> {
+  try {
+    let query = supabaseAdmin
+      .from('cita')
+      .select(`
+        id_cita,
+        fecha_cita,
+        hora_inicio,
+        hora_fin,
+        tipo_cita,
+        estado_cita,
+        motivo_consulta,
+        referencia,
+        precio_cita,
+        estado_pago,
+        forma_pago,
+        consulta_realizada,
+        paciente:paciente(
+          id_paciente,
+          nombres,
+          apellidos,
+          cedula
+        ),
+        sucursal:sucursal(
+          id_sucursal,
+          nombre
+        ),
+        especialidad:especialidad(
+          id_especialidad,
+          nombre
+        ),
+        aseguradora:aseguradora(
+          id_aseguradora,
+          nombre
+        ),
+        usuario_sucursal:usuario_sucursal(
+          id_usuario_sucursal,
+          usuario:usuario(
+            nombre,
+            apellido
+          )
+        )
+      `)
+      .gte('fecha_cita', fechaInicio)
+      .lte('fecha_cita', fechaFin)
+      .order('fecha_cita', { ascending: true })
+      .order('hora_inicio', { ascending: true });
+
+    if (idSucursal) query = query.eq('id_sucursal', idSucursal);
+    if (idEspecialidad) query = query.eq('id_especialidad', idEspecialidad);
+    if (origenAgendamiento) query = query.eq('origen_agendamiento', origenAgendamiento);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error en getCitasDashboardExport:', error);
+      return [];
+    }
+
+    return ((data as any[]) || []).map((cita: any) => {
+      const paciente = `${cita.paciente?.nombres || ''} ${cita.paciente?.apellidos || ''}`.trim();
+      const medico = `${cita.usuario_sucursal?.usuario?.nombre || ''} ${cita.usuario_sucursal?.usuario?.apellido || ''}`.trim();
+
+      return {
+        idCita: cita.id_cita,
+        fecha: cita.fecha_cita || '',
+        horaInicio: cita.hora_inicio || '',
+        horaFin: cita.hora_fin || '',
+        paciente: paciente || 'N/A',
+        cedula: cita.paciente?.cedula || 'N/A',
+        medico: medico || 'N/A',
+        sucursal: cita.sucursal?.nombre || 'N/A',
+        especialidad: cita.especialidad?.nombre || 'N/A',
+        tipoCita: cita.tipo_cita || 'N/A',
+        estadoCita: cita.estado_cita || 'N/A',
+        aseguradora: cita.aseguradora?.nombre || 'Particular',
+        referencia: cita.referencia || 'Sin referencia',
+        precio: parseFloat(cita.precio_cita) || 0,
+        estadoPago: cita.estado_pago || 'pendiente',
+        formaPago: cita.forma_pago || 'N/A',
+        consultaRealizada: cita.consulta_realizada ? 'Sí' : 'No'
+      };
+    });
+  } catch (error) {
+    console.error('Error en getCitasDashboardExport:', error);
+    return [];
+  }
 }
 
 // ========================================

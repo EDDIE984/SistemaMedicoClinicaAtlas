@@ -101,6 +101,10 @@ export function DetalleCitaDialog({
                                 <MapPin className="size-3" />
                                 <span>{cita.usuario_sucursal.sucursal.nombre}</span>
                             </div>
+                            <div className="flex items-center gap-2 text-gray-600">
+                                <Stethoscope className="size-3" />
+                                <span>{cita.usuario_sucursal.especialidad || 'Especialidad no definida'}</span>
+                            </div>
                         </div>
 
                         {/* Motivo de consulta */}

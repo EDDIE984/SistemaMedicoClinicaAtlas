@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, AreaChart, Area, Line
 } from 'recharts';
 import {
-    Calendar, Building2, RefreshCw, Stethoscope
+    Calendar, Building2, RefreshCw, Stethoscope, Download
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -14,7 +15,8 @@ import {
     useCitasDashboard
 } from '../hooks/useReportes';
 import { supabaseAdmin } from '../lib/supabase';
-import { formatearFechaCorta } from '../lib/reportesService';
+import { formatearFechaCorta, getCitasDashboardExport } from '../lib/reportesService';
+import { toast } from 'sonner';
 
 const COLORS = ["#6366f1", "#22d3ee", "#f59e0b", "#10b981", "#f43f5e", "#a78bfa", "#fb923c", "#34d399"];
 
@@ -64,18 +66,20 @@ export default function CitasDashboardSupabase({ currentUser }: CitasDashboardPr
     const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
     const [idSucursal, setIdSucursal] = useState<string>("all");
     const [idEspecialidad, setIdEspecialidad] = useState<string>("all");
+    const [origenAgendamiento, setOrigenAgendamiento] = useState<string>("all");
 
     const [sucursales, setSucursales] = useState<any[]>([]);
     const [especialidades, setEspecialidades] = useState<any[]>([]);
 
     const numSucursal = idSucursal === "all" ? undefined : parseInt(idSucursal);
     const numEspecialidad = idEspecialidad === "all" ? undefined : parseInt(idEspecialidad);
+    const origenFiltro = origenAgendamiento === 'all' ? undefined : (origenAgendamiento as 'SISTEMA' | 'CHATBOT');
 
     const {
         stats, citasDia, citasEsp, distAseguradora, distTipo,
         distFormaPago, distEstadoPago, citasHora, duracionProm,
         distReferencia, medicos, isLoading, loadAll
-    } = useCitasDashboard(fechaInicio, fechaFin, numSucursal, numEspecialidad);
+    } = useCitasDashboard(fechaInicio, fechaFin, numSucursal, numEspecialidad, origenFiltro);
 
     useEffect(() => {
         fetchFiltros();
@@ -86,6 +90,44 @@ export default function CitasDashboardSupabase({ currentUser }: CitasDashboardPr
         const { data: eData } = await supabaseAdmin.from('especialidad').select('id_especialidad, nombre').eq('estado', 'activo');
         if (sData) setSucursales(sData);
         if (eData) setEspecialidades(eData);
+    };
+
+    const handleDownloadCitas = async () => {
+        const citas = await getCitasDashboardExport(fechaInicio, fechaFin, numSucursal, numEspecialidad, origenFiltro);
+
+        if (!citas.length) {
+            toast.info('No hay citas para descargar con los filtros actuales');
+            return;
+        }
+
+        const dataExcel = citas.map(cita => ({
+            'ID Cita': cita.idCita,
+            'Fecha': cita.fecha,
+            'Hora Inicio': cita.horaInicio,
+            'Hora Fin': cita.horaFin,
+            'Paciente': cita.paciente,
+            'Cédula': cita.cedula,
+            'Médico': cita.medico,
+            'Sucursal': cita.sucursal,
+            'Especialidad': cita.especialidad,
+            'Tipo Cita': cita.tipoCita,
+            'Estado Cita': cita.estadoCita,
+            'Aseguradora': cita.aseguradora,
+            'Referencia': cita.referencia,
+            'Precio': cita.precio,
+            'Estado Pago': cita.estadoPago,
+            'Forma Pago': cita.formaPago,
+            'Consulta Realizada': cita.consultaRealizada,
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(dataExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Citas');
+
+        const suffix = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `citas-dashboard-${suffix}.xlsx`);
+
+        toast.success(`Descarga completada: ${citas.length} citas`);
     };
 
     if (isLoading) {
@@ -175,8 +217,23 @@ export default function CitasDashboardSupabase({ currentUser }: CitasDashboardPr
                         </SelectContent>
                     </Select>
 
+                    <Select value={origenAgendamiento} onValueChange={setOrigenAgendamiento}>
+                        <SelectTrigger className="w-[150px] h-9 bg-white border-gray-200 text-[11px] font-semibold">
+                            <SelectValue placeholder="Origen" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Origen: Todos</SelectItem>
+                            <SelectItem value="SISTEMA">Sistema</SelectItem>
+                            <SelectItem value="CHATBOT">ChatBot</SelectItem>
+                        </SelectContent>
+                    </Select>
+
                     <Button size="icon" variant="ghost" className="h-9 w-9 bg-white border border-gray-200" onClick={loadAll}>
                         <RefreshCw className="size-4 text-blue-500" />
+                    </Button>
+                    <Button variant="outline" className="h-9 bg-white border-gray-200 text-[11px] font-semibold" onClick={handleDownloadCitas}>
+                        <Download className="size-3.5 mr-2" />
+                        Descargar Excel
                     </Button>
                 </div>
             </div>
