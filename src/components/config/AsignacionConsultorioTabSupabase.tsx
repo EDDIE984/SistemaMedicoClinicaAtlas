@@ -10,7 +10,7 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Plus, Pencil, Trash2, Loader2, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAsignacionesConsultorio, formatearDiaSemana, useUsuarioSucursales, useConsultorios } from '../../hooks/useConfiguraciones';
+import { useAsignacionesConsultorio, formatearDiaSemana, useUsuarioSucursales, useConsultorios, useSucursales } from '../../hooks/useConfiguraciones';
 import type { AsignacionConsultorio } from '../../lib/configuracionesService';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 
@@ -28,6 +28,10 @@ export function AsignacionConsultorioTabSupabase() {
   const { asignaciones, isLoading, agregarAsignacion, actualizarAsignacion, eliminarAsignacion } = useAsignacionesConsultorio();
   const { asignaciones: usuariosSucursales } = useUsuarioSucursales();
   const { consultorios } = useConsultorios();
+  const { sucursales } = useSucursales();
+  
+  const [filtroSucursal, setFiltroSucursal] = useState<string>('todas');
+  const [filtroMedico, setFiltroMedico] = useState<string>('todos');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -43,7 +47,7 @@ export function AsignacionConsultorioTabSupabase() {
     hora_inicio: '08:00',
     hora_fin: '17:00',
     duracion_consulta: 30,
-    estado: 'activo'
+    estado: 'activo' as 'activo' | 'inactivo'
   });
 
   // Filtrar consultorios cuando cambia el médico seleccionado
@@ -81,14 +85,15 @@ export function AsignacionConsultorioTabSupabase() {
   }, [formData.id_usuario_sucursal, usuariosSucursales, consultorios]);
 
   const handleNuevo = () => {
+    const primerMedico = usuariosSucursales.find(us => us.cargo === 'MEDICO ESPECIALISTA');
     setFormData({
-      id_usuario_sucursal: usuariosSucursales[0]?.id_usuario_sucursal || 0,
+      id_usuario_sucursal: primerMedico?.id_usuario_sucursal || 0,
       id_consultorio: consultorios[0]?.id_consultorio || 0,
       dia_semana: 1,
       hora_inicio: '08:00',
       hora_fin: '17:00',
       duracion_consulta: 30,
-      estado: 'activo'
+      estado: 'activo' as 'activo' | 'inactivo'
     });
     setIsEditing(false);
     setAsignacionActual(null);
@@ -134,7 +139,7 @@ export function AsignacionConsultorioTabSupabase() {
       hora_inicio: formData.hora_inicio,
       hora_fin: formData.hora_fin,
       duracion_consulta: formData.duracion_consulta,
-      estado: formData.estado
+      estado: formData.estado as 'activo' | 'inactivo'
     };
 
     console.log('📋 Guardando horario:', datos);
@@ -176,9 +181,15 @@ export function AsignacionConsultorioTabSupabase() {
     }
   };
 
+  const asignacionesFiltradas = asignaciones.filter(asig => {
+    const cumpleSucursal = filtroSucursal === 'todas' || asig.usuario_sucursal?.id_sucursal.toString() === filtroSucursal;
+    const cumpleMedico = filtroMedico === 'todos' || asig.usuario_sucursal?.id_usuario.toString() === filtroMedico;
+    return cumpleSucursal && cumpleMedico;
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="flex items-center gap-2">
             <CalendarClock className="size-5" />
@@ -191,6 +202,50 @@ export function AsignacionConsultorioTabSupabase() {
           Nuevo Horario
         </Button>
       </div>
+
+      {/* Sección de Filtros */}
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-xs">Filtrar por Sucursal</Label>
+            <Select value={filtroSucursal} onValueChange={setFiltroSucursal}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las sucursales" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las sucursales</SelectItem>
+                {sucursales.map(s => (
+                  <SelectItem key={s.id_sucursal} value={s.id_sucursal.toString()}>
+                    {s.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Filtrar por Médico</Label>
+            <Select value={filtroMedico} onValueChange={setFiltroMedico}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los médicos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los médicos</SelectItem>
+                {usuariosSucursales
+                  .filter(us => us.cargo === 'MEDICO ESPECIALISTA')
+                  // Eliminar duplicados de médicos si están en varias sucursales para el filtro
+                  .filter((us, index, self) => 
+                    index === self.findIndex(t => t.id_usuario === us.id_usuario)
+                  )
+                  .map(us => (
+                    <SelectItem key={us.id_usuario} value={us.id_usuario.toString()}>
+                      Dr. {us.usuario?.nombre} {us.usuario?.apellido}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </Card>
 
       {(usuariosSucursales.length === 0 || consultorios.length === 0) && (
         <Card className="p-4 bg-yellow-50 border-yellow-200">
@@ -221,14 +276,14 @@ export function AsignacionConsultorioTabSupabase() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {asignaciones.length === 0 ? (
+              {asignacionesFiltradas.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                    No hay asignaciones de horario registradas
+                    No hay asignaciones de horario que coincidan con los filtros
                   </TableCell>
                 </TableRow>
               ) : (
-                asignaciones.map((asignacion, index) => (
+                asignacionesFiltradas.map((asignacion, index) => (
                   <TableRow key={asignacion.id_asignacion || `asignacion-${index}`}>
                     <TableCell className="font-semibold">
                       Dr. {asignacion.usuario_sucursal?.usuario?.nombre} {asignacion.usuario_sucursal?.usuario?.apellido}
@@ -285,14 +340,14 @@ export function AsignacionConsultorioTabSupabase() {
               <Label>Médico *</Label>
               <Select
                 value={formData.id_usuario_sucursal.toString()}
-                onValueChange={(value) => setFormData({ ...formData, id_usuario_sucursal: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, id_usuario_sucursal: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {usuariosSucursales
-                    .filter((us) => us.usuario?.tipo_usuario === 'medico')
+                    .filter((us) => us.cargo === 'MEDICO ESPECIALISTA')
                     .map((us) => (
                       <SelectItem key={us.id_usuario_sucursal} value={us.id_usuario_sucursal.toString()}>
                         Dr. {us.usuario?.nombre} {us.usuario?.apellido} - {us.sucursal?.nombre}
@@ -306,7 +361,7 @@ export function AsignacionConsultorioTabSupabase() {
               <Label>Consultorio *</Label>
               <Select
                 value={formData.id_consultorio.toString()}
-                onValueChange={(value) => setFormData({ ...formData, id_consultorio: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, id_consultorio: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -325,7 +380,7 @@ export function AsignacionConsultorioTabSupabase() {
               <Label>Día de la semana *</Label>
               <Select
                 value={formData.dia_semana.toString()}
-                onValueChange={(value) => setFormData({ ...formData, dia_semana: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, dia_semana: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -378,7 +433,7 @@ export function AsignacionConsultorioTabSupabase() {
 
             <div className="space-y-2">
               <Label>Estado</Label>
-              <Select value={formData.estado} onValueChange={(value) => setFormData({ ...formData, estado: value })}>
+              <Select value={formData.estado} onValueChange={(value: 'activo' | 'inactivo') => setFormData({ ...formData, estado: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

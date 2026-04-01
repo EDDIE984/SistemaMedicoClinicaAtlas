@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Phone, Mail, Calendar, Clock, MapPin, Stethoscope, XCircle, Minimize2, Maximize2, X } from 'lucide-react';
 import type { CitaCompleta } from '../lib/citasService';
+import { canModificarCita, canCancelarCita, canIniciarCita } from '../lib/citasService';
 import { calcularEdad } from '../lib/pacientesService';
 
 interface DetalleCitaDialogProps {
@@ -34,6 +35,10 @@ export function DetalleCitaDialog({
     }, [isOpen]);
 
     if (!cita) return null;
+
+    const esModificable = canModificarCita(cita);
+    const esCancelable = canCancelarCita(cita);
+    const esIniciable = canIniciarCita(cita);
 
     return (
         <>
@@ -103,7 +108,7 @@ export function DetalleCitaDialog({
                             </div>
                             <div className="flex items-center gap-2 text-gray-600">
                                 <Stethoscope className="size-3" />
-                                <span>{cita.usuario_sucursal.especialidad || 'Especialidad no definida'}</span>
+                                <span>{(cita as any).especialidades?.nombre || cita.usuario_sucursal.especialidad || 'Especialidad no definida'}</span>
                             </div>
                         </div>
 
@@ -125,6 +130,7 @@ export function DetalleCitaDialog({
                                         onClose();
                                         onIniciarConsulta(cita);
                                     }}
+                                    disabled={!esIniciable}
                                 >
                                     <Stethoscope className="size-3 mr-1" />
                                     Iniciar cita
@@ -136,6 +142,7 @@ export function DetalleCitaDialog({
                                         onClose();
                                         onModificar(cita);
                                     }}
+                                    disabled={!esModificable}
                                 >
                                     <Calendar className="size-3 mr-1" />
                                     Modificar cita
@@ -147,6 +154,7 @@ export function DetalleCitaDialog({
                                         onClose();
                                         onCancelar(cita);
                                     }}
+                                    disabled={!esCancelable}
                                 >
                                     <XCircle className="size-3 mr-1" />
                                     Cancelar cita

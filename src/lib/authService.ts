@@ -22,6 +22,7 @@ export interface AsignacionCompleta {
   id_sucursal: number;
   id_especialidad: number | null;
   especialidad: string;
+  cargo: string | null;
   estado: 'activo' | 'inactivo';
   usuario?: {
     id_usuario: number;
@@ -145,6 +146,7 @@ export async function getAsignacionesCompletasByUsuario(
         id_sucursal,
         id_especialidad,
         especialidad,
+        cargo,
         estado,
         sucursal:sucursal!inner (
           id_sucursal,
@@ -184,6 +186,7 @@ export async function getAsignacionesCompletasByUsuario(
       id_sucursal: asig.id_sucursal,
       id_especialidad: asig.id_especialidad,
       especialidad: asig.especialidad || 'Sin especialidad',
+      cargo: asig.cargo || null,
       estado: asig.estado,
       sucursal: {
         id_sucursal: asig.sucursal.id_sucursal,
@@ -290,6 +293,7 @@ export async function getMedicosBySucursal(id_sucursal: number): Promise<Asignac
         id_sucursal,
         id_especialidad,
         especialidad,
+        cargo,
         estado,
         usuario:usuario!inner (
           id_usuario,
@@ -341,6 +345,7 @@ export async function getMedicosBySucursal(id_sucursal: number): Promise<Asignac
       id_sucursal: asig.id_sucursal,
       id_especialidad: asig.id_especialidad,
       especialidad: asig.especialidad || 'Sin especialidad',
+      cargo: asig.cargo || null,
       estado: asig.estado,
       usuario: {
         id_usuario: asig.usuario.id_usuario,

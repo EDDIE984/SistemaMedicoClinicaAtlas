@@ -75,7 +75,7 @@ export function UsuarioSucursalTabSupabase() {
       id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
       especialidad: null, // Deprecated
       cargo: formData.cargo.trim() || null,
-      estado: formData.estado
+      estado: formData.estado as 'activo' | 'inactivo'
     };
 
     if (isEditing && asignacionActual) {
@@ -267,11 +267,19 @@ export function UsuarioSucursalTabSupabase() {
 
             <div className="space-y-2">
               <Label>Cargo</Label>
-              <Input
+              <Select
                 value={formData.cargo}
-                onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                placeholder="Ej: Médico, Recepcionista"
-              />
+                onValueChange={(value: string) => setFormData({ ...formData, cargo: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione un cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MEDICO ESPECIALISTA">Médico Especialista</SelectItem>
+                  <SelectItem value="MEDICO SUPLENTE">Médico Suplente</SelectItem>
+                  <SelectItem value="MEDICO RESPALDO">Médico Respaldo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

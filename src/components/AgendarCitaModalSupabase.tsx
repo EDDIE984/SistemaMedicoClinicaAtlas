@@ -12,7 +12,7 @@ import { useHorarios } from '../hooks/useCitas';
 import { Plus, Search, Pencil, Edit, Loader2, FileText, Calendar, Clock, X, XCircle, Minimize2, Maximize2 } from 'lucide-react'; // Import icons
 import { getAllPacientes } from '../lib/pacientesService';
 import { getAsignacionesCompletasByUsuario, getSucursalesByCompania, getMedicosBySucursal, type AsignacionCompleta } from '../lib/authService';
-import { createCita, updateCita, generarHorariosDisponibles, type CitaCompleta } from '../lib/citasService';
+import { createCita, updateCita, generarHorariosDisponibles, canModificarCita, type CitaCompleta } from '../lib/citasService';
 import { updatePaciente } from '../lib/pacientesService'; // Import updatePaciente
 import { consultarCedulaRegistroCivil } from '../lib/registroCivilService'; // Import automatic ID lookup
 import { getAllEspecialidades, type Especialidad, getAllAseguradoras, type Aseguradora } from '../lib/configuracionesService'; // Import getAllEspecialidades and insurers
@@ -75,6 +75,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const [asignaciones, setAsignaciones] = useState<AsignacionCompleta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearchingCedula, setIsSearchingCedula] = useState(false); // Estado para loading de cédula
+  const [isModificacionPermitida, setIsModificacionPermitida] = useState(true);
 
   // Estados específicos para SECRETARIA
   const [sucursalSecretaria, setSucursalSecretaria] = useState('');
@@ -82,6 +83,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
   const [selectedEspecialidad, setSelectedEspecialidad] = useState('');
   const [medicosDisponibles, setMedicosDisponibles] = useState<AsignacionCompleta[]>([]);
+  const [selectedMedico, setSelectedMedico] = useState<AsignacionCompleta | null>(null);
 
   // Estado para edición de paciente
   const [isEditingPatient, setIsEditingPatient] = useState(false);
@@ -96,6 +98,8 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   // Pre-llenar datos cuando se edita
   useEffect(() => {
     if (isOpen && citaEditar) {
+      setIsModificacionPermitida(canModificarCita(citaEditar));
+
       // Si estamos en modo edición, ir directamente a detalles
       setStep('detalles');
       setSelectedPacienteId(citaEditar.id_paciente.toString());
@@ -131,6 +135,8 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
         };
         cargarData();
       }
+    } else {
+      setIsModificacionPermitida(true);
     }
   }, [isOpen, citaEditar, esSecretaria]);
 
@@ -223,6 +229,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     setSucursalSecretaria(sucursalId);
     setSelectedEspecialidad(''); // Reset especialidad
     setSelectedAsignacion(''); // Reset médico
+    setSelectedMedico(null);
     setFecha(''); // Reset fecha
     setHoraInicio(''); // Reset hora
     setMedicosDisponibles([]); // Reset médicos
@@ -239,6 +246,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const handleEspecialidadChange = (especialidadId: string) => {
     setSelectedEspecialidad(especialidadId);
     setSelectedAsignacion(''); // Reset médico al cambiar especialidad
+    setSelectedMedico(null);
 
     // Si queremos filtrar automáticamente la lista de médicos, lo hacemos en el render
     // o aquí si preferimos tener un estado separado de medicosFiltrados.
@@ -291,7 +299,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
   const idAsignacionNum = selectedAsignacion ? parseInt(selectedAsignacion) : null;
   console.log('🎯 AgendarCitaModal - selectedAsignacion:', selectedAsignacion);
   console.log('🎯 AgendarCitaModal - idAsignacionNum:', idAsignacionNum);
-  const { diasSemana, precio, verificarDisponibilidadHorario, getCitasDelDia } = useHorarios(idAsignacionNum);
+  const { diasSemana, precio, verificarDisponibilidadHorario, getCitasDelDia } = useHorarios(
+    idAsignacionNum,
+    selectedMedico?.cargo,
+    selectedMedico?.sucursal.id_compania
+  );
   const [citasDelDia, setCitasDelDia] = useState<any[]>([]);
 
   console.log('💰 AgendarCitaModal - Precio recibido del hook:', precio);
@@ -352,8 +364,12 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
       diasSemanaCompleto: diasSemana
     });
 
-    // Comparar números con números
-    return diasSemana.some(d => d.dia_semana === diaSemanaNumero);
+    // Comparar números con números; para suplentes también validar rango de fecha
+    return diasSemana.some(d =>
+      d.dia_semana === diaSemanaNumero &&
+      (!d.fecha_inicio || fechaSeleccionada >= d.fecha_inicio) &&
+      (!d.fecha_fin || fechaSeleccionada <= d.fecha_fin)
+    );
   };
 
   // Obtener horarios disponibles para el día seleccionado
@@ -363,7 +379,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     const fechaDate = new Date(fecha + 'T00:00:00');
     const diaSemanaNumero = fechaDate.getDay(); // 0=domingo, 1=lunes, 2=martes...
 
-    const diaConfig = diasSemana.find(d => d.dia_semana === diaSemanaNumero);
+    const diaConfig = diasSemana.find(d =>
+      d.dia_semana === diaSemanaNumero &&
+      (!d.fecha_inicio || fecha >= d.fecha_inicio) &&
+      (!d.fecha_fin || fecha <= d.fecha_fin)
+    );
     if (!diaConfig) return [];
 
     // Usar la duración configurada en lugar de 15 minutos fijos
@@ -420,7 +440,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     const fechaDate = new Date(fecha + 'T00:00:00');
     const diaSemanaNumero = fechaDate.getDay();
 
-    const diaConfig = diasSemana.find(d => d.dia_semana === diaSemanaNumero);
+    const diaConfig = diasSemana.find(d =>
+      d.dia_semana === diaSemanaNumero &&
+      (!d.fecha_inicio || fecha >= d.fecha_inicio) &&
+      (!d.fecha_fin || fecha <= d.fecha_fin)
+    );
     return diaConfig?.duracion_consulta || 30;
   };
 
@@ -616,6 +640,12 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
 
     const horaFin = calcularHoraFin(horaInicio, duracion);
 
+    // Verificar si la modificación está permitida
+    if (modoEdicion && !isModificacionPermitida) {
+      toast.error('No se puede modificar esta cita. Solo puede cancelar o ver detalles.');
+      return;
+    }
+
     // Verificar disponibilidad (solo si no estamos editando o si cambió el horario)
     if (!modoEdicion ||
       (citaEditar && (citaEditar.fecha_cita !== fecha || citaEditar.hora_inicio !== horaInicio))) {
@@ -754,6 +784,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
     setSearchPaciente('');
     setSelectedPacienteId('');
     setSelectedAsignacion('');
+    setSelectedMedico(null);
     setFecha('');
     setHoraInicio('');
     setDuracion('30');
@@ -772,6 +803,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
       id_sucursal: null,
       nombre_sucursal: ''
     });
+    setIsModificacionPermitida(true);
     onClose();
   };
 
@@ -964,6 +996,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
             </div>
           ) : (
             <div className="space-y-4">
+              {modoEdicion && !isModificacionPermitida && (
+                <div className="bg-yellow-100 text-yellow-800 border border-yellow-300 p-3 rounded text-sm">
+                  No es posible modificar esta cita porque está pasada o está a menos de 1 hora. Solo puede cancelar.
+                </div>
+              )}
               <div className="bg-blue-50/50 p-3 rounded-md border border-blue-100 flex justify-between items-center">
                 <div>
                   <p className="text-xs text-blue-600 font-semibold uppercase tracking-wider">Paciente</p>
@@ -1023,7 +1060,11 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
                   {sucursalSecretaria && (
                     <div className="space-y-2">
                       <Label>Médico *</Label>
-                      <Select value={selectedAsignacion} onValueChange={setSelectedAsignacion}>
+                      <Select value={selectedAsignacion} onValueChange={(val: string) => {
+                          setSelectedAsignacion(val);
+                          const medico = medicosFiltrados.find((m: AsignacionCompleta) => m.id_usuario_sucursal.toString() === val) || null;
+                          setSelectedMedico(medico);
+                        }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione médico" />
                         </SelectTrigger>
@@ -1035,7 +1076,7 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
                           ) : (
                             medicosFiltrados.map((medico: any) => (
                               <SelectItem key={medico.id_usuario_sucursal} value={medico.id_usuario_sucursal.toString()}>
-                                Dr. {medico.usuario.nombre} {medico.usuario.apellido} - {medico.especialidad}
+                                Dr. {medico.usuario.nombre} {medico.usuario.apellido}
                               </SelectItem>
                             ))
                           )}
@@ -1199,8 +1240,16 @@ export function AgendarCitaModalSupabase({ isOpen, onClose, onCitaAgendada, idUs
               </Button>
             )}
             {step === 'detalles' && (
-              <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
-                {isLoading ? (modoEdicion ? 'Modificando...' : 'Agendando...') : (modoEdicion ? 'Modificar Cita' : 'Agendar Cita')}
+              <Button
+                onClick={handleSubmit}
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isLoading || (modoEdicion && !isModificacionPermitida)}
+              >
+                {isLoading
+                  ? (modoEdicion ? 'Modificando...' : 'Agendando...')
+                  : (modoEdicion
+                    ? (isModificacionPermitida ? 'Modificar Cita' : 'No modificable')
+                    : 'Agendar Cita')}
               </Button>
             )}
           </DialogFooter>

@@ -12,6 +12,7 @@ import { DetalleCitaDialog } from './DetalleCitaDialog';
 import { SupabaseIndicator } from './SupabaseIndicator';
 import { toast } from 'sonner';
 import type { CitaCompleta } from '../lib/citasService';
+import { canModificarCita } from '../lib/citasService';
 import { calcularEdad } from '../lib/pacientesService';
 import { getSucursalesByCompania, getMedicosBySucursal, type AsignacionCompleta } from '../lib/authService';
 import {
@@ -241,6 +242,11 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
 
   // Manejar modificación de cita
   const handleModificar = (cita: CitaCompleta) => {
+    if (!canModificarCita(cita)) {
+      toast.error('No se puede modificar esta cita. Solo se permite cancelar o ver detalles.');
+      return;
+    }
+
     setCitaSeleccionada(cita);
     setIsAgendarModalOpen(true);
   };
@@ -385,7 +391,7 @@ export function AgendaViewSupabase({ currentUser, onIniciarConsulta }: AgendaVie
                           Dr. {cita.usuario_sucursal.usuario.apellido.split(' ')[0]}
                         </div>
                         <div className="text-[10px] text-gray-500 truncate">
-                          {cita.usuario_sucursal.especialidad || 'Especialidad no definida'}
+                          {(cita as any).especialidades?.nombre || cita.usuario_sucursal.especialidad || 'Especialidad no definida'}
                         </div>
                         <div className="font-medium truncate text-gray-900">
                           {cita.paciente.nombres.split(' ')[0]} {cita.paciente.apellidos.split(' ')[0]}

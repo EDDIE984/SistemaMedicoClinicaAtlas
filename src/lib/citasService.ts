@@ -26,6 +26,7 @@ export interface Cita {
   estado_pago?: 'pendiente' | 'pagado' | 'parcial';
   referencia?: string;
   origen_agendamiento?: 'SISTEMA' | 'CHATBOT';
+  seguro_medico_chatbot?: boolean | null;
   created_at?: string;
   cancelada_por?: number;
   motivo_cancelacion?: string;
@@ -67,6 +68,39 @@ export interface CitaCompleta extends Cita {
   };
 }
 
+export function canModificarCita(cita: CitaCompleta): boolean {
+  if (!cita || cita.estado_cita === 'cancelada' || cita.consulta_realizada) return false;
+  if (!cita.fecha_cita || !cita.hora_inicio) return false;
+
+  const fechaHoraCita = new Date(`${cita.fecha_cita}T${cita.hora_inicio.substring(0, 5)}:00`);
+  const ahora = new Date();
+  const diferenciaMs = fechaHoraCita.getTime() - ahora.getTime();
+
+  // Solo si la cita es estrictamente futura y con al menos 1 hora de anticipación
+  return diferenciaMs > 60 * 60 * 1000;
+}
+
+export function canCancelarCita(cita: CitaCompleta): boolean {
+  // Misma lógica que modificar: futura y con al menos 1 hora de anticipación
+  return canModificarCita(cita);
+}
+
+export function canIniciarCita(cita: CitaCompleta): boolean {
+  if (!cita || cita.estado_cita === 'cancelada' || cita.consulta_realizada) return false;
+  if (!cita.fecha_cita || !cita.hora_inicio) return false;
+
+  const fechaHoraCita = new Date(`${cita.fecha_cita}T${cita.hora_inicio.substring(0, 5)}:00`);
+  const ahora = new Date();
+  const diferenciaMs = fechaHoraCita.getTime() - ahora.getTime();
+
+  // No permitir citas pasadas
+  if (diferenciaMs < 0) return false;
+
+  // Permitir iniciar desde 1 hora antes hasta 1 hora después
+  const unaHoraMs = 60 * 60 * 1000;
+  return Math.abs(diferenciaMs) <= unaHoraMs;
+}
+
 export interface Cancelacion {
   id_cancelacion: number;
   id_cita: number;
@@ -92,6 +126,8 @@ export interface DiaSemana {
   hora_fin: string;
   duracion_consulta: number; // Duración de cada cita en minutos
   estado: string;
+  fecha_inicio?: string; // Solo presente para MEDICO SUPLENTE / MEDICO RESPALDO
+  fecha_fin?: string;    // Solo presente para MEDICO SUPLENTE / MEDICO RESPALDO
   created_at?: string;
   updated_at?: string;
 }
@@ -99,6 +135,25 @@ export interface DiaSemana {
 // ========================================
 // FUNCIONES DE CITAS
 // ========================================
+
+/**
+ * Enriquece citas con el nombre de especialidad desde la tabla `especialidad`
+ * (no hay FK en el esquema, por eso se hace en dos pasos)
+ */
+async function enrichCitasConEspecialidad(citas: any[]): Promise<any[]> {
+  if (citas.length === 0) return citas;
+  const ids = [...new Set(citas.map(c => c.id_especialidad).filter(Boolean))];
+  if (ids.length === 0) return citas;
+  const { data } = await (supabaseAdmin.from('especialidad') as any)
+    .select('id_especialidad, nombre')
+    .in('id_especialidad', ids);
+  const mapaEspecialidad: Record<number, string> = {};
+  (data || []).forEach((e: any) => { mapaEspecialidad[e.id_especialidad] = e.nombre; });
+  return citas.map(c => ({
+    ...c,
+    especialidades: c.id_especialidad ? { id_especialidad: c.id_especialidad, nombre: mapaEspecialidad[c.id_especialidad] || null } : null,
+  }));
+}
 
 /**
  * Obtener todas las citas de un paciente
@@ -156,12 +211,8 @@ export async function getCitasByPaciente(idPaciente: number): Promise<CitaComple
 
     console.log(`✅ Se encontraron ${data?.length || 0} citas para el paciente`);
 
-    // Mapear los datos para incluir el campo "fecha" (alias de fecha_cita) para compatibilidad con el frontend
-    const citasMapeadas = (data || []).map((cita: any) => ({
-      ...cita,
-      fecha: cita.fecha_cita // Agregar alias para compatibilidad
-    }));
-
+    const citasBase = (data || []).map((cita: any) => ({ ...cita, fecha: cita.fecha_cita }));
+    const citasMapeadas = await enrichCitasConEspecialidad(citasBase);
     return citasMapeadas;
   } catch (error) {
     console.error('❌ Error inesperado al obtener citas del paciente:', error);
@@ -260,12 +311,8 @@ export async function getCitasByUsuarioYFechas(
 
     console.log(`✅ Se encontraron ${data?.length || 0} citas`);
 
-    // Mapear los datos para incluir el campo "fecha" (alias de fecha_cita) para compatibilidad con el frontend
-    const citasMapeadas = (data || []).map((cita: any) => ({
-      ...cita,
-      fecha: cita.fecha_cita // Agregar alias para compatibilidad
-    }));
-
+    const citasBase = (data || []).map((cita: any) => ({ ...cita, fecha: cita.fecha_cita }));
+    const citasMapeadas = await enrichCitasConEspecialidad(citasBase);
     return citasMapeadas;
   } catch (error) {
     console.error('❌ Error inesperado al obtener citas:', error);
@@ -332,12 +379,8 @@ export async function getCitasBySucursalYFechas(
     }
 
 
-    // Mapear los datos para incluir el campo "fecha" (alias de fecha_cita) para compatibilidad con el frontend
-    const citasMapeadas = (data || []).map((cita: any) => ({
-      ...cita,
-      fecha: cita.fecha_cita // Agregar alias para compatibilidad
-    }));
-
+    const citasBase = (data || []).map((cita: any) => ({ ...cita, fecha: cita.fecha_cita }));
+    const citasMapeadas = await enrichCitasConEspecialidad(citasBase);
     return citasMapeadas;
   } catch (error) {
     return [];
@@ -637,7 +680,11 @@ export async function getCancelacionByCita(idCita: number): Promise<Cancelacion 
  * Obtener precio de un usuario en una sucursal
  * Busca primero en precio_usuario_sucursal, si no existe busca en precio_base_especialidad
  */
-export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promise<number> {
+export async function getPrecioUsuarioSucursal(
+  idUsuarioSucursal: number,
+  cargo?: string | null,
+  idCompania?: number
+): Promise<number> {
   try {
     console.log('💰 Buscando precio para id_usuario_sucursal:', idUsuarioSucursal);
 
@@ -659,48 +706,64 @@ export async function getPrecioUsuarioSucursal(idUsuarioSucursal: number): Promi
       return precioUsuario.precio_consulta;
     }
 
-    console.log('⚠️ No hay precio personalizado, buscando precio base por especialidad...');
+    console.log('⚠️ No hay precio personalizado, buscando precio base por cargo...');
 
-    // 2. Si no hay precio personalizado, obtener especialidad del usuario y la compañía
-    const { data: usuarioSucursal, error: errorUsuarioSucursal } = await (supabaseAdmin
-      .from('usuario_sucursal') as any)
-      .select(`
-        especialidad,
-        sucursal:sucursal!inner (
-          id_compania
-        )
-      `)
-      .eq('id_usuario_sucursal', idUsuarioSucursal)
-      .single();
+    let cargoFinal = cargo;
+    let idCompaniaFinal = idCompania;
 
-    if (errorUsuarioSucursal || !usuarioSucursal?.especialidad) {
-      console.error('❌ Error al obtener especialidad del usuario:', errorUsuarioSucursal);
+    // 2. Si no se recibieron cargo e idCompania, obtenerlos desde la BD
+    if (!cargoFinal || !idCompaniaFinal) {
+      const { data: usuarioSucursal, error: errorUsuarioSucursal } = await (supabaseAdmin
+        .from('usuario_sucursal') as any)
+        .select(`
+          cargo,
+          sucursal:sucursal (
+            id_compania
+          )
+        `)
+        .eq('id_usuario_sucursal', idUsuarioSucursal)
+        .single();
+
+      if (errorUsuarioSucursal) {
+        console.error('❌ Error al obtener cargo del usuario:', errorUsuarioSucursal);
+        return 0;
+      }
+
+      cargoFinal = (usuarioSucursal as any)?.cargo;
+      const sucursalData = (usuarioSucursal as any)?.sucursal;
+      idCompaniaFinal = Array.isArray(sucursalData)
+        ? sucursalData[0]?.id_compania
+        : sucursalData?.id_compania;
+    }
+
+    if (!cargoFinal) {
+      console.warn('⚠️ El médico no tiene cargo asignado, no se puede buscar precio base');
       return 0;
     }
 
-    console.log('📋 Especialidad encontrada:', usuarioSucursal.especialidad);
-    console.log('🏢 Compañía:', (usuarioSucursal as any).sucursal?.id_compania);
+    console.log('📋 Cargo:', cargoFinal);
+    console.log('🏢 Compañía:', idCompaniaFinal);
 
-    // 3. Buscar precio base de la especialidad en la compañía
+    // 3. Buscar precio base del cargo en la compañía
     const { data: precioBase, error: errorPrecioBase } = await (supabaseAdmin
       .from('precio_base_especialidad') as any)
       .select('precio_consulta')
-      .eq('especialidad', usuarioSucursal.especialidad)
-      .eq('id_compania', (usuarioSucursal as any).sucursal?.id_compania)
+      .eq('cargo', cargoFinal)
+      .eq('id_compania', idCompaniaFinal)
       .eq('estado', 'activo')
       .maybeSingle();
 
     if (errorPrecioBase) {
-      console.error('❌ Error al obtener precio base de especialidad:', errorPrecioBase);
+      console.error('❌ Error al obtener precio base de cargo:', errorPrecioBase);
       return 0;
     }
 
     if (precioBase?.precio_consulta) {
-      console.log('✅ Precio base por especialidad encontrado:', precioBase.precio_consulta);
+      console.log('✅ Precio base por cargo encontrado:', precioBase.precio_consulta);
       return precioBase.precio_consulta;
     }
 
-    console.log('⚠️ No se encontró precio base para la especialidad');
+    console.log('⚠️ No se encontró precio base para cargo:', cargoFinal, 'compañía:', idCompaniaFinal);
     return 0;
   } catch (error) {
     console.error('❌ Error inesperado al obtener precio:', error);
@@ -728,6 +791,44 @@ export async function getDiasSemanaUsuarioSucursal(idUsuarioSucursal: number): P
     return data || [];
   } catch (error) {
     console.error('❌ Error inesperado al obtener días de semana:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtener planificaciones de horario para médicos suplente/respaldo
+ * Consulta planificacion_horario_suplente en lugar de asignacion_consultorio
+ */
+export async function getPlanificacionesSuplente(idUsuarioSucursal: number): Promise<DiaSemana[]> {
+  try {
+    const { data, error } = await (supabaseAdmin
+      .from('planificacion_horario_suplente') as any)
+      .select('*')
+      .eq('id_usuario_sucursal', idUsuarioSucursal)
+      .eq('estado', 'activo')
+      .order('dia_semana', { ascending: true });
+
+    if (error) {
+      console.error('❌ Error al obtener planificaciones suplente:', error);
+      return [];
+    }
+
+    return (data || []).map((p: any) => ({
+      id_asignacion: p.id_planificacion,
+      id_usuario_sucursal: p.id_usuario_sucursal,
+      id_consultorio: p.id_consultorio,
+      dia_semana: p.dia_semana,
+      hora_inicio: p.hora_inicio,
+      hora_fin: p.hora_fin,
+      duracion_consulta: p.duracion_consulta,
+      estado: p.estado,
+      fecha_inicio: p.fecha_inicio,
+      fecha_fin: p.fecha_fin,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+    }));
+  } catch (error) {
+    console.error('❌ Error inesperado al obtener planificaciones suplente:', error);
     return [];
   }
 }

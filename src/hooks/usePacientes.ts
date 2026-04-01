@@ -85,6 +85,13 @@ export function usePacientes(idCompania?: number, options: { initialLoad?: boole
     return await getPacienteById(id);
   };
 
+  const cargarPacienteById = async (id: number) => {
+    const paciente = await getPacienteById(id);
+    if (paciente) {
+      setPacientes([paciente]);
+    }
+  };
+
   const crearPaciente = async (paciente: Omit<Paciente, 'id_paciente' | 'created_at' | 'activo'>) => {
     try {
       const nuevoPaciente = await createPaciente(paciente);
@@ -137,6 +144,7 @@ export function usePacientes(idCompania?: number, options: { initialLoad?: boole
     buscarPacientes,
     buscarPacientePorCedula,
     obtenerPaciente,
+    cargarPacienteById,
     crearPaciente,
     actualizarPaciente,
     eliminarPaciente,

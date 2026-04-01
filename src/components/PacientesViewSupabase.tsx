@@ -35,7 +35,8 @@ import {
   Calendar,
   Loader2,
   Clock,
-  Pencil
+  Pencil,
+  Stethoscope
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -109,7 +110,7 @@ export function PacientesViewSupabase({
     }
   }, [currentUser]);
 
-  const { pacientes, isLoading, buscarPacientes, crearPaciente, actualizarPaciente, clearPacientes } = usePacientes(idCompania || undefined, { initialLoad: false });
+  const { pacientes, isLoading, buscarPacientes, crearPaciente, actualizarPaciente, clearPacientes, cargarPacienteById } = usePacientes(idCompania || undefined, { initialLoad: false });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedPatientId, setExpandedPatientId] = useState<number | null>(null);
@@ -121,6 +122,9 @@ export function PacientesViewSupabase({
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
   const [isSearchingCedula, setIsSearchingCedula] = useState(false); // Estado para loading de cédula
   const [isEditingPatient, setIsEditingPatient] = useState(false); // Estado para edición
+  const [citaIdParaConsulta, setCitaIdParaConsulta] = useState<number | null>(null); // ID de cita para iniciar consulta
+  const [isVerConsultaDialogOpen, setIsVerConsultaDialogOpen] = useState(false);
+  const [consultaSeleccionada, setConsultaSeleccionada] = useState<ConsultaMedica | null>(null);
 
 
   // Estado para citas del paciente seleccionado
@@ -199,7 +203,9 @@ export function PacientesViewSupabase({
     motivo_consulta: '',
     historial_clinico: '',
     receta_medica: '',
-    pedido_examenes: ''
+    pedido_examenes: '',
+    fecha_seguimiento: '',
+    pedido_hospitalizacion: ''
   });
 
   // Sucursal seleccionada para crear la consulta
@@ -216,6 +222,7 @@ export function PacientesViewSupabase({
       if (!isNaN(pacienteId)) {
         setExpandedPatientId(pacienteId);
         setSelectedPatientId(pacienteId);
+        cargarPacienteById(pacienteId);
       }
     }
   }, [pacienteIdInicial]);
@@ -578,7 +585,7 @@ export function PacientesViewSupabase({
   };
 
   // Abrir diálogo de consulta
-  const handleAbrirConsulta = () => {
+  const handleAbrirConsulta = (citaId?: number) => {
     if (!selectedPatientId) {
       toast.error('No hay paciente seleccionado');
       return;
@@ -588,12 +595,21 @@ export function PacientesViewSupabase({
       motivo_consulta: '',
       historial_clinico: '',
       receta_medica: '',
-      pedido_examenes: ''
+      pedido_examenes: '',
+      fecha_seguimiento: '',
+      pedido_hospitalizacion: ''
     });
     if (sucursales.length > 0) {
       setSucursalSeleccionada(sucursales[0].id_sucursal);
     }
+    setCitaIdParaConsulta(citaId || null);
     setIsConsultaDialogOpen(true);
+  };
+
+  // Ver detalles de consulta médica
+  const handleVerConsulta = (consulta: ConsultaMedica) => {
+    setConsultaSeleccionada(consulta);
+    setIsVerConsultaDialogOpen(true);
   };
 
   // Guardar o actualizar antecedentes del paciente
@@ -698,7 +714,7 @@ export function PacientesViewSupabase({
 
       console.log('Usuario obtenido:', usuarioData);
 
-      let idCitaParaConsulta = citaIdInicial;
+      let idCitaParaConsulta = citaIdParaConsulta || citaIdInicial;
 
       // Si no viene desde la agenda, crear una cita automática con la sucursal seleccionada
       if (!idCitaParaConsulta) {
@@ -821,10 +837,21 @@ export function PacientesViewSupabase({
         diagnostico: null,
         receta_medica: consultaForm.receta_medica || null,
         pedido_examenes: consultaForm.pedido_examenes || null,
-        observaciones: null
+        observaciones: null,
+        fecha_seguimiento: consultaForm.fecha_seguimiento || null,
+        pedido_hospitalizacion: consultaForm.pedido_hospitalizacion || null
       });
 
       if (nuevaConsulta) {
+        // Si la cita ya existía (vino desde la agenda), actualizar su estado a "atendida"
+        const citaEraPreexistente = !!(citaIdParaConsulta || citaIdInicial);
+        if (citaEraPreexistente && idCitaParaConsulta) {
+          const marcada = await marcarCitaCompletada(idCitaParaConsulta, usuarioData.id_usuario);
+          if (!marcada) {
+            console.error('⚠️ La consulta se guardó pero no se pudo actualizar el estado de la cita a "atendida"');
+          }
+        }
+
         // Recargar las citas del paciente
         const citasActualizadas = await getCitasByPaciente(selectedPatientId);
         setCitasPaciente(citasActualizadas);
@@ -847,7 +874,9 @@ export function PacientesViewSupabase({
           motivo_consulta: '',
           historial_clinico: '',
           receta_medica: '',
-          pedido_examenes: ''
+          pedido_examenes: '',
+          fecha_seguimiento: '',
+          pedido_hospitalizacion: ''
         });
 
         // Llamar callback si existe
@@ -889,27 +918,6 @@ export function PacientesViewSupabase({
             ? `Paciente seleccionado: ${pacienteSeleccionado.nombres} ${pacienteSeleccionado.apellidos}`
             : "Click para buscar paciente..."}
         </Button>
-
-        <Button
-          onClick={() => {
-            setIsEditingPatient(false);
-            setNewPatient({
-              nombres: '',
-              apellidos: '',
-              fecha_nacimiento: '',
-              sexo: 'M',
-              cedula: '',
-              email: '',
-              telefono: '',
-              direccion: '',
-            });
-            setIsNewPatientDialogOpen(true);
-          }}
-          className="bg-blue-600 hover:bg-blue-700 h-12 px-6"
-        >
-          <Plus className="size-5 mr-2" />
-          Nuevo Paciente
-        </Button>
       </div>
 
       {/* Main Content */}
@@ -947,15 +955,6 @@ export function PacientesViewSupabase({
                         <Badge variant="outline">
                           {pacienteSeleccionado.cedula}
                         </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleAbrirConsulta}
-                          className="h-8 w-8 p-0 hover:bg-blue-100 rounded-full"
-                          title="Iniciar Consulta"
-                        >
-                          <Plus className="size-5 text-blue-600" />
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1171,7 +1170,7 @@ export function PacientesViewSupabase({
                                   <div className="flex items-center gap-2 mb-1">
                                     <Calendar className="size-4 text-gray-500" />
                                     <span className="text-sm">
-                                      {new Date(cita.fecha_cita).toLocaleDateString('es-ES', {
+                                      {new Date(cita.fecha_cita + 'T00:00:00').toLocaleDateString('es-ES', {
                                         weekday: 'short',
                                         day: '2-digit',
                                         month: 'short',
@@ -1222,9 +1221,13 @@ export function PacientesViewSupabase({
                               </div>
 
                               <div className="pt-2 border-t text-sm text-gray-600">
-                                <p className="font-medium">{cita.usuario_sucursal.usuario.nombre} {cita.usuario_sucursal.usuario.apellido}</p>
-                                {cita.usuario_sucursal.especialidad && (
-                                  <p className="text-xs text-gray-500">{cita.usuario_sucursal.especialidad}</p>
+                                <p className="font-medium">Dr. {cita.usuario_sucursal.usuario.nombre} {cita.usuario_sucursal.usuario.apellido}</p>
+                                <p className="text-xs text-gray-500">{cita.usuario_sucursal.especialidad || 'Médico General'}</p>
+                                <p className="text-xs text-gray-500">ChatBot Seguro Medico: {cita.seguro_medico_chatbot === true ? 'Sí' : 'No'}</p>
+                                {cita.aseguradora ? (
+                                  <p className="text-xs text-gray-500">Aseguradora: {cita.aseguradora.nombre}</p>
+                                ) : (
+                                  <p className="text-xs text-gray-500">Aseguradora: No</p>
                                 )}
                               </div>
 
@@ -1261,6 +1264,34 @@ export function PacientesViewSupabase({
                                     {cita.estado_pago}
                                   </Badge>
                                 )}
+                              </div>
+
+                              {/* Botones de acción */}
+                              <div className="pt-3 border-t space-y-2">
+                                {/* Botón Iniciar Consulta para citas pendientes */}
+                                {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && (
+                                  <Button
+                                    size="sm"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={() => handleAbrirConsulta(cita.id_cita)}
+                                  >
+                                    <Stethoscope className="size-3 mr-2" />
+                                    Iniciar Consulta
+                                  </Button>
+                                )}
+
+                                {/* Botón Ver para todas las citas */}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => consulta ? handleVerConsulta(consulta) : null}
+                                  disabled={cita.estado_cita === 'agendada' || !consulta}
+                                  title={cita.estado_cita === 'agendada' ? "Disponible solo para citas atendidas" : consulta ? "Ver detalles de la consulta" : "No hay consulta registrada"}
+                                >
+                                  <FileText className="size-3 mr-2" />
+                                  Ver Detalles
+                                </Button>
                               </div>
                             </CardContent>
                           </Card>
@@ -1667,12 +1698,12 @@ export function PacientesViewSupabase({
 
             {/* Historial Clínico */}
             <div className="space-y-2">
-              <Label htmlFor="historialClinico" className="text-sm">Historial Clínico</Label>
+              <Label htmlFor="historialClinico" className="text-sm">Hallazgos en la consulta</Label>
               <Textarea
                 id="historialClinico"
                 value={consultaForm.historial_clinico}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, historial_clinico: e.target.value.toUpperCase() })}
-                placeholder="DIAGNÓSTICO, OBSERVACIONES MÉDICAS..."
+                placeholder="HALLAZGOS CLÍNICOS, DIAGNÓSTICO, OBSERVACIONES..."
                 className="min-h-[100px] text-sm uppercase"
               />
             </div>
@@ -1700,6 +1731,30 @@ export function PacientesViewSupabase({
                 className="min-h-[100px] text-sm uppercase"
               />
             </div>
+
+            {/* Fecha de Seguimiento */}
+            <div className="space-y-2">
+              <Label htmlFor="fechaSeguimiento" className="text-sm">Próxima Consulta / Fecha de Seguimiento</Label>
+              <Input
+                id="fechaSeguimiento"
+                type="date"
+                value={consultaForm.fecha_seguimiento}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConsultaForm({ ...consultaForm, fecha_seguimiento: e.target.value })}
+                className="text-sm"
+              />
+            </div>
+
+            {/* Pedido de Hospitalización */}
+            <div className="space-y-2">
+              <Label htmlFor="pedidoHospitalizacion" className="text-sm">Pedido de Hospitalización</Label>
+              <Textarea
+                id="pedidoHospitalizacion"
+                value={consultaForm.pedido_hospitalizacion}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setConsultaForm({ ...consultaForm, pedido_hospitalizacion: e.target.value.toUpperCase() })}
+                placeholder="INDICACIONES Y MOTIVO DE HOSPITALIZACIÓN (dejar vacío si no aplica)..."
+                className="min-h-[80px] text-sm uppercase"
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -1725,6 +1780,141 @@ export function PacientesViewSupabase({
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Ver Detalles de Consulta */}
+      <Dialog open={isVerConsultaDialogOpen} onOpenChange={setIsVerConsultaDialogOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-5 text-blue-600" />
+              Detalles de la Consulta Médica
+            </DialogTitle>
+            <DialogDescription>
+              Información registrada por el médico durante la consulta
+            </DialogDescription>
+          </DialogHeader>
+
+          {consultaSeleccionada && (
+            <div className="space-y-6">
+              {/* Información del médico */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-900 mb-2">Información del Médico</h4>
+                <div className="text-sm text-blue-800">
+                  <p><strong>ID Médico:</strong> {consultaSeleccionada.id_usuario}</p>
+                  <p><strong>Fecha de Consulta:</strong> {new Date(consultaSeleccionada.fecha_consulta).toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}</p>
+                </div>
+              </div>
+
+              {/* Motivo de Consulta */}
+              {(() => {
+                const citaCorrespondiente = citasPaciente.find(c => c.id_cita === consultaSeleccionada.id_cita);
+                return citaCorrespondiente?.motivo_consulta && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Motivo de Consulta</Label>
+                    <div className="bg-gray-50 p-3 rounded-md text-sm whitespace-pre-wrap">
+                      {citaCorrespondiente.motivo_consulta}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Historial Clínico */}
+              {consultaSeleccionada.historial_clinico && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Historial Clínico</Label>
+                  <div className="bg-gray-50 p-3 rounded-md text-sm whitespace-pre-wrap">
+                    {consultaSeleccionada.historial_clinico}
+                  </div>
+                </div>
+              )}
+
+              {/* Diagnóstico */}
+              {consultaSeleccionada.diagnostico && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Diagnóstico</Label>
+                  <div className="bg-blue-50 p-3 rounded-md text-sm whitespace-pre-wrap border border-blue-200">
+                    {consultaSeleccionada.diagnostico}
+                  </div>
+                </div>
+              )}
+
+              {/* Receta Médica */}
+              {consultaSeleccionada.receta_medica && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-green-700">Receta Médica</Label>
+                  <div className="bg-green-50 p-3 rounded-md text-sm whitespace-pre-wrap border border-green-200">
+                    {consultaSeleccionada.receta_medica}
+                  </div>
+                </div>
+              )}
+
+              {/* Pedido de Exámenes */}
+              {consultaSeleccionada.pedido_examenes && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-orange-700">Pedido de Exámenes</Label>
+                  <div className="bg-orange-50 p-3 rounded-md text-sm whitespace-pre-wrap border border-orange-200">
+                    {consultaSeleccionada.pedido_examenes}
+                  </div>
+                </div>
+              )}
+
+              {/* Próxima Consulta */}
+              {consultaSeleccionada.fecha_seguimiento && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-blue-700">Próxima Consulta / Seguimiento</Label>
+                  <div className="bg-blue-50 p-3 rounded-md text-sm border border-blue-200">
+                    {new Date(consultaSeleccionada.fecha_seguimiento + 'T00:00:00').toLocaleDateString('es-ES', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Pedido de Hospitalización */}
+              {consultaSeleccionada.pedido_hospitalizacion && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-red-700">Pedido de Hospitalización</Label>
+                  <div className="bg-red-50 p-3 rounded-md text-sm whitespace-pre-wrap border border-red-200">
+                    {consultaSeleccionada.pedido_hospitalizacion}
+                  </div>
+                </div>
+              )}
+
+              {/* Observaciones */}
+              {consultaSeleccionada.observaciones && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Observaciones</Label>
+                  <div className="bg-gray-50 p-3 rounded-md text-sm whitespace-pre-wrap">
+                    {consultaSeleccionada.observaciones}
+                  </div>
+                </div>
+              )}
+
+              {/* Fecha de la consulta */}
+              <div className="pt-4 border-t text-xs text-gray-500">
+                <p>Registro creado el {new Date(consultaSeleccionada.created_at || consultaSeleccionada.fecha_consulta).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

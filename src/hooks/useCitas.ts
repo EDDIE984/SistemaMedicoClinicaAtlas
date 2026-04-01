@@ -9,6 +9,7 @@ import {
   marcarCitaCompletada,
   getPrecioUsuarioSucursal,
   getDiasSemanaUsuarioSucursal,
+  getPlanificacionesSuplente,
   verificarDisponibilidad,
   type CitaCompleta,
   type Cita,
@@ -119,7 +120,11 @@ export function useCitas(idUsuario: number | null, fechaInicio: string, fechaFin
   };
 }
 
-export function useHorarios(idUsuarioSucursal: number | null) {
+export function useHorarios(
+  idUsuarioSucursal: number | null,
+  cargo?: string | null,
+  idCompania?: number
+) {
   const [diasSemana, setDiasSemana] = useState<DiaSemana[]>([]);
   const [precio, setPrecio] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +139,7 @@ export function useHorarios(idUsuarioSucursal: number | null) {
       setDiasSemana([]);
       setPrecio(0);
     }
-  }, [idUsuarioSucursal]);
+  }, [idUsuarioSucursal, cargo, idCompania]);
 
   const loadHorarios = async () => {
     if (!idUsuarioSucursal) {
@@ -145,9 +150,12 @@ export function useHorarios(idUsuarioSucursal: number | null) {
     console.log('🔍 loadHorarios - Cargando horarios y precio para id_usuario_sucursal:', idUsuarioSucursal);
     setIsLoading(true);
 
+    const esSuplente = cargo === 'MEDICO SUPLENTE' || cargo === 'MEDICO RESPALDO';
     const [dias, precioData] = await Promise.all([
-      getDiasSemanaUsuarioSucursal(idUsuarioSucursal),
-      getPrecioUsuarioSucursal(idUsuarioSucursal)
+      esSuplente
+        ? getPlanificacionesSuplente(idUsuarioSucursal)
+        : getDiasSemanaUsuarioSucursal(idUsuarioSucursal),
+      getPrecioUsuarioSucursal(idUsuarioSucursal, cargo, idCompania)
     ]);
 
     console.log('✅ loadHorarios - Días cargados:', dias.length);

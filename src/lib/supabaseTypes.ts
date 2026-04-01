@@ -317,6 +317,7 @@ export interface Database {
           id_sucursal: number
           id_especialidad: number | null
           especialidad: string | null
+          cargo: string | null
           estado: 'activo' | 'inactivo'
           created_at: string
           updated_at: string
@@ -327,6 +328,7 @@ export interface Database {
           id_sucursal: number
           id_especialidad: number | null
           especialidad?: string | null
+          cargo?: string | null
           estado?: 'activo' | 'inactivo'
           created_at?: string
           updated_at?: string
@@ -337,6 +339,7 @@ export interface Database {
           id_sucursal?: number
           id_especialidad?: number | null
           especialidad?: string | null
+          cargo?: string | null
           estado?: 'activo' | 'inactivo'
           created_at?: string
           updated_at?: string
@@ -518,7 +521,7 @@ export interface Database {
         Row: {
           id_precio_base: number
           id_compania: number
-          especialidad: string
+          cargo: string
           precio_consulta: number
           precio_control: number
           precio_emergencia: number
@@ -529,7 +532,7 @@ export interface Database {
         Insert: {
           id_precio_base?: number
           id_compania: number
-          especialidad: string
+          cargo: string
           precio_consulta: number
           precio_control: number
           precio_emergencia: number
@@ -540,7 +543,7 @@ export interface Database {
         Update: {
           id_precio_base?: number
           id_compania?: number
-          especialidad?: string
+          cargo?: string
           precio_consulta?: number
           precio_control?: number
           precio_emergencia?: number
@@ -578,6 +581,50 @@ export interface Database {
           id_asignacion?: number
           id_usuario_sucursal?: number
           id_consultorio?: number
+          dia_semana?: number
+          hora_inicio?: string
+          hora_fin?: string
+          duracion_consulta?: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      planificacion_horario_suplente: {
+        Row: {
+          id_planificacion: number
+          id_usuario_sucursal: number
+          id_consultorio: number
+          fecha_inicio: string
+          fecha_fin: string
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          duracion_consulta: number
+          estado: 'activo' | 'inactivo'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id_planificacion?: number
+          id_usuario_sucursal: number
+          id_consultorio: number
+          fecha_inicio: string
+          fecha_fin: string
+          dia_semana: number
+          hora_inicio: string
+          hora_fin: string
+          duracion_consulta?: number
+          estado?: 'activo' | 'inactivo'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id_planificacion?: number
+          id_usuario_sucursal?: number
+          id_consultorio?: number
+          fecha_inicio?: string
+          fecha_fin?: string
           dia_semana?: number
           hora_inicio?: string
           hora_fin?: string

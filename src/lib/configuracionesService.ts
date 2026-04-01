@@ -99,7 +99,7 @@ export interface UsuarioSucursal {
 export interface PrecioBase {
   id_precio_base: number;
   id_compania: number;
-  especialidad: string;
+  cargo: string;
   precio_consulta: number;
   precio_control: number;
   precio_emergencia: number;
@@ -116,6 +116,7 @@ export interface PrecioUsuario {
   precio_emergencia: number;
   tipo_ajuste: string;
   valor_ajuste: number;
+  duracion_consulta: number;
   estado: 'activo' | 'inactivo';
   created_at?: string;
   updated_at?: string;
@@ -857,7 +858,7 @@ export async function getAllPreciosBase(): Promise<PrecioBase[]> {
     const { data, error } = await (supabaseAdmin
       .from('precio_base_especialidad') as any)
       .select('*')
-      .order('especialidad', { ascending: true });
+      .order('cargo', { ascending: true });
 
     if (error) {
       console.error('❌ Error al obtener precios base:', error);
@@ -874,7 +875,7 @@ export async function getAllPreciosBase(): Promise<PrecioBase[]> {
 
 export async function createPrecioBase(precio: Omit<PrecioBase, 'id_precio_base' | 'created_at'>): Promise<PrecioBase | null> {
   try {
-    console.log('➕ Creando precio base:', precio.especialidad);
+    console.log('➕ Creando precio base:', precio.cargo);
     const { data, error } = await (supabaseAdmin
       .from('precio_base_especialidad') as any)
       .insert(precio as any)
@@ -967,6 +968,22 @@ export async function getAllPreciosUsuario(): Promise<PrecioUsuario[]> {
   } catch (error) {
     console.error('❌ Error inesperado:', error);
     return [];
+  }
+}
+
+export async function getDuracionByUsuarioSucursal(idUsuarioSucursal: number): Promise<number | null> {
+  try {
+    const { data, error } = await (supabaseAdmin
+      .from('precio_usuario_sucursal') as any)
+      .select('duracion_consulta')
+      .eq('id_usuario_sucursal', idUsuarioSucursal)
+      .eq('estado', 'activo')
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.duracion_consulta ?? null;
+  } catch (error) {
+    console.error('❌ Error al obtener duración del médico:', error);
+    return null;
   }
 }
 
@@ -1205,4 +1222,154 @@ export function formatearMoneda(monto: number): string {
     currency: 'USD',
     minimumFractionDigits: 2,
   }).format(monto);
+}
+
+// ========================================
+// INTERFACES - PLANIFICACIÓN HORARIO SUPLENTES
+// ========================================
+
+export interface PlanificacionHorario {
+  id_planificacion: number;
+  id_usuario_sucursal: number;
+  id_consultorio: number;
+  fecha_inicio: string; // "YYYY-MM-DD"
+  fecha_fin: string;    // "YYYY-MM-DD"
+  dia_semana: number;   // 1=Lunes ... 7=Domingo
+  hora_inicio: string;
+  hora_fin: string;
+  duracion_consulta: number;
+  estado: 'activo' | 'inactivo';
+  created_at?: string;
+  updated_at?: string;
+  // Relations (vía JOIN)
+  usuario_sucursal?: {
+    cargo: string;
+    usuario: { nombre: string; apellido: string };
+    especialidad_data: { nombre: string } | null;
+  };
+  consultorio?: { nombre: string; piso: string | null; numero: string | null };
+}
+
+const PLANIFICACION_SELECT = `
+  *,
+  usuario_sucursal!inner(
+    cargo,
+    usuario!inner(nombre, apellido),
+    especialidad_data:especialidad(nombre)
+  ),
+  consultorio(nombre, piso, numero)
+`;
+
+// ========================================
+// FUNCIONES - PLANIFICACIÓN HORARIO SUPLENTES
+// ========================================
+
+export async function getPlanificacionesByUsuarioSucursal(
+  idUsuarioSucursal: number,
+  fechaInicio: string,
+  fechaFin: string
+): Promise<PlanificacionHorario[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('planificacion_horario_suplente')
+      .select(PLANIFICACION_SELECT)
+      .eq('id_usuario_sucursal', idUsuarioSucursal)
+      .eq('fecha_inicio', fechaInicio)
+      .eq('fecha_fin', fechaFin)
+      .order('dia_semana')
+      .order('hora_inicio');
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error al obtener planificaciones:', error);
+    return [];
+  }
+}
+
+export async function getPlanificacionesBySucursal(
+  idSucursal: number,
+  fechaInicio: string,
+  fechaFin: string
+): Promise<PlanificacionHorario[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('planificacion_horario_suplente')
+      .select(`${PLANIFICACION_SELECT}, usuario_sucursal!inner(id_sucursal)`)
+      .eq('usuario_sucursal.id_sucursal', idSucursal)
+      .eq('fecha_inicio', fechaInicio)
+      .eq('fecha_fin', fechaFin)
+      .order('dia_semana')
+      .order('hora_inicio');
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error al obtener planificaciones por sucursal:', error);
+    return [];
+  }
+}
+
+export async function createPlanificacion(
+  planificacion: Omit<PlanificacionHorario, 'id_planificacion' | 'created_at' | 'updated_at' | 'usuario_sucursal' | 'consultorio'>
+): Promise<PlanificacionHorario | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('planificacion_horario_suplente')
+      .insert(planificacion)
+      .select(PLANIFICACION_SELECT)
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('❌ Error al crear planificación:', error);
+    return null;
+  }
+}
+
+export async function updatePlanificacion(
+  idPlanificacion: number,
+  updates: Partial<Omit<PlanificacionHorario, 'id_planificacion' | 'created_at' | 'updated_at' | 'usuario_sucursal' | 'consultorio'>>
+): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin
+      .from('planificacion_horario_suplente')
+      .update(updates)
+      .eq('id_planificacion', idPlanificacion);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('❌ Error al actualizar planificación:', error);
+    return false;
+  }
+}
+
+export async function deletePlanificacion(idPlanificacion: number): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin
+      .from('planificacion_horario_suplente')
+      .delete()
+      .eq('id_planificacion', idPlanificacion);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('❌ Error al eliminar planificación:', error);
+    return false;
+  }
+}
+
+export async function getMedicosSuplentesYRespaldoBySucursal(
+  idSucursal: number
+): Promise<UsuarioSucursal[]> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('usuario_sucursal')
+      .select('*, usuario!inner(nombre, apellido, tipo_usuario), sucursal!inner(nombre), especialidad_data:especialidad(nombre)')
+      .eq('id_sucursal', idSucursal)
+      .eq('estado', 'activo')
+      .in('cargo', ['MEDICO SUPLENTE', 'MEDICO RESPALDO']);
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error al obtener médicos suplentes y respaldo:', error);
+    return [];
+  }
 }

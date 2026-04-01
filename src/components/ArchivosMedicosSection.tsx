@@ -134,7 +134,7 @@ export function ArchivosMedicosSection({ pacienteId }: ArchivosMedicosSectionPro
         <div className="flex items-center justify-between mb-3">
           <Label className="font-medium flex items-center gap-2">
             <Paperclip className="size-4" />
-            Archivos Médicos ({archivos.length})
+            Exámenes Médicos ({archivos.length})
           </Label>
           <Button 
             variant="outline" 

@@ -36,22 +36,19 @@ app.get("/make-server-3d193f8d/agenda/slots-disponibles", async (c) => {
     const idSucursal = c.req.query("id_sucursal");
     const idMedico = c.req.query("id_medico"); // Opcional
 
-    // Validar parámetros requeridos
     if (!fecha) {
       return c.json({ error: "El parámetro 'fecha' es requerido" }, 400);
     }
 
-    // Crear cliente de Supabase
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Obtener el día de la semana
     const diaSemana = getDiaSemana(fecha);
 
-    // Query para obtener horarios (plantillas)
-    let queryHorarios = supabase
+    // ── 1. ESPECIALISTAS: usar asignacion_consultorio ──────────────────────
+    let queryEspecialistas = supabase
       .from("asignacion_consultorio")
       .select(`
         id_asignacion,
@@ -61,89 +58,139 @@ app.get("/make-server-3d193f8d/agenda/slots-disponibles", async (c) => {
         estado,
         usuario_sucursal!inner(
           id_usuario,
-          usuario!inner(
-            id_usuario,
-            nombre,
-            apellido
-          )
+          cargo,
+          usuario!inner(id_usuario, nombre, apellido)
         ),
         consultorio!inner(
           id_consultorio,
           nombre,
           id_sucursal,
-          sucursal(
-            id_sucursal,
-            nombre
-          )
+          sucursal(id_sucursal, nombre)
         )
       `)
       .eq("dia_semana", diaSemana)
-      .eq("estado", "activo");
+      .eq("estado", "activo")
+      .eq("usuario_sucursal.cargo", "MEDICO ESPECIALISTA");
 
-    // Filtrar por sucursal si se proporciona
     if (idSucursal) {
-      queryHorarios = queryHorarios.eq("consultorio.id_sucursal", parseInt(idSucursal));
+      queryEspecialistas = queryEspecialistas.eq("consultorio.id_sucursal", parseInt(idSucursal));
     }
-
-    // Filtrar por médico si se proporciona
     if (idMedico) {
-      queryHorarios = queryHorarios.eq("usuario_sucursal.id_usuario", parseInt(idMedico));
+      queryEspecialistas = queryEspecialistas.eq("usuario_sucursal.id_usuario", parseInt(idMedico));
     }
 
-    const { data: horarios, error: errorHorarios } = await queryHorarios;
-
-    if (errorHorarios) {
-      console.error("Error al obtener horarios:", errorHorarios);
-      return c.json({ error: "Error al obtener horarios: " + errorHorarios.message }, 500);
+    const { data: horariosEspecialistas, error: errorEspecialistas } = await queryEspecialistas;
+    if (errorEspecialistas) {
+      console.error("Error horarios especialistas:", errorEspecialistas);
+      return c.json({ error: "Error al obtener horarios: " + errorEspecialistas.message }, 500);
     }
 
-    if (!horarios || horarios.length === 0) {
+    // ── 2. SUPLENTES Y RESPALDO: usar planificacion_horario_suplente ───────
+    let querySuplentes = supabase
+      .from("planificacion_horario_suplente")
+      .select(`
+        id_planificacion,
+        hora_inicio,
+        hora_fin,
+        duracion_consulta,
+        estado,
+        usuario_sucursal!inner(
+          id_usuario,
+          cargo,
+          usuario!inner(id_usuario, nombre, apellido)
+        ),
+        consultorio!inner(
+          id_consultorio,
+          nombre,
+          id_sucursal,
+          sucursal(id_sucursal, nombre)
+        )
+      `)
+      .eq("dia_semana", diaSemana)
+      .eq("estado", "activo")
+      .lte("fecha_inicio", fecha)
+      .gte("fecha_fin", fecha);
+
+    if (idSucursal) {
+      querySuplentes = querySuplentes.eq("consultorio.id_sucursal", parseInt(idSucursal));
+    }
+    if (idMedico) {
+      querySuplentes = querySuplentes.eq("usuario_sucursal.id_usuario", parseInt(idMedico));
+    }
+
+    const { data: horariosSuplentes, error: errorSuplentes } = await querySuplentes;
+    if (errorSuplentes) {
+      console.error("Error horarios suplentes:", errorSuplentes);
+      return c.json({ error: "Error al obtener planificaciones: " + errorSuplentes.message }, 500);
+    }
+
+    // ── 3. Combinar horarios ───────────────────────────────────────────────
+    const horariosEspecialistasNorm = (horariosEspecialistas || []).map((h: any) => ({
+      ...h,
+      _source: "asignacion_consultorio",
+      _ref_id: h.id_asignacion,
+    }));
+
+    const horariosSuplentesNorm = (horariosSuplentes || []).map((h: any) => ({
+      ...h,
+      id_asignacion: null,
+      _source: "planificacion_horario_suplente",
+      _ref_id: h.id_planificacion,
+    }));
+
+    const todosHorarios = [...horariosEspecialistasNorm, ...horariosSuplentesNorm];
+
+    if (todosHorarios.length === 0) {
       return c.json({
         fecha,
         dia_semana: diaSemana,
         slots_disponibles: [],
-        mensaje: `No hay horarios configurados para ${diaSemana}`
+        mensaje: `No hay horarios configurados para el día ${diaSemana}`
       });
     }
 
-    // Obtener citas ocupadas para esa fecha
-    let queryCitas = supabase
+    // ── 4. Citas ocupadas para esa fecha ──────────────────────────────────
+    const { data: citasOcupadas, error: errorCitas } = await supabase
       .from("cita")
       .select("id_asignacion, hora_inicio, hora_fin, estado_cita")
       .eq("fecha_cita", fecha)
       .not("estado_cita", "in", '("cancelada","no_asistio")');
-
-    const { data: citasOcupadas, error: errorCitas } = await queryCitas;
 
     if (errorCitas) {
       console.error("Error al obtener citas:", errorCitas);
       return c.json({ error: "Error al obtener citas: " + errorCitas.message }, 500);
     }
 
-    // Generar slots disponibles para cada horario
-    const slotsDisponibles = horarios.map((horario: any) => {
-      // Generar todos los slots posibles
+    // ── 5. Generar slots ──────────────────────────────────────────────────
+    const slotsDisponibles = todosHorarios.map((horario: any) => {
       const todosLosSlots = generarSlots(
         horario.hora_inicio,
         horario.hora_fin,
         horario.duracion_consulta
       );
 
-      // Filtrar citas que pertenecen a esta asignación
-      const citasDeEsteHorario = (citasOcupadas || []).filter(
-        (cita: any) => cita.id_asignacion === horario.id_asignacion
-      );
+      // Para especialistas: filtrar por id_asignacion
+      // Para suplentes: filtrar por solapamiento de hora en esa fecha (sin id_asignacion)
+      const citasDeEsteHorario = (citasOcupadas || []).filter((cita: any) => {
+        if (horario._source === "asignacion_consultorio") {
+          return cita.id_asignacion === horario.id_asignacion;
+        }
+        // Suplentes: citas de esa fecha que NO tienen id_asignacion (agendadas para suplentes)
+        return cita.id_asignacion === null;
+      });
 
-      // Filtrar slots disponibles
       const slots = filtrarSlotsDisponibles(todosLosSlots, citasDeEsteHorario);
 
       return {
-        id_asignacion: horario.id_asignacion,
+        id_asignacion: horario._source === "asignacion_consultorio" ? horario.id_asignacion : null,
+        id_planificacion: horario._source === "planificacion_horario_suplente" ? horario.id_planificacion : null,
+        fuente_horario: horario._source,
         medico: {
           id_usuario: horario.usuario_sucursal.usuario.id_usuario,
           nombre: horario.usuario_sucursal.usuario.nombre,
           apellido: horario.usuario_sucursal.usuario.apellido,
-          nombre_completo: `${horario.usuario_sucursal.usuario.nombre} ${horario.usuario_sucursal.usuario.apellido}`
+          nombre_completo: `${horario.usuario_sucursal.usuario.nombre} ${horario.usuario_sucursal.usuario.apellido}`,
+          cargo: horario.usuario_sucursal.cargo,
         },
         consultorio: {
           id_consultorio: horario.consultorio.id_consultorio,
@@ -168,7 +215,7 @@ app.get("/make-server-3d193f8d/agenda/slots-disponibles", async (c) => {
     return c.json({
       fecha,
       dia_semana: diaSemana,
-      total_horarios: horarios.length,
+      total_horarios: todosHorarios.length,
       slots_disponibles: slotsDisponibles
     });
 

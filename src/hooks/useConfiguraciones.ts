@@ -29,10 +29,6 @@ import {
   createPrecioBase,
   updatePrecioBase,
   deletePrecioBase,
-  getAllPreciosUsuario,
-  createPrecioUsuario,
-  updatePrecioUsuario,
-  deletePrecioUsuario,
   getAllAsignacionesConsultorio,
   getAsignacionesByUsuarioSucursal,
   createAsignacionConsultorio,
@@ -42,6 +38,11 @@ import {
   createEspecialidad,
   updateEspecialidad,
   deleteEspecialidad,
+  getPlanificacionesByUsuarioSucursal,
+  createPlanificacion,
+  updatePlanificacion,
+  deletePlanificacion,
+  getMedicosSuplentesYRespaldoBySucursal,
   type Compania,
   type Sucursal,
   type Consultorio,
@@ -49,10 +50,13 @@ import {
   type TipoUsuario,
   type UsuarioSucursal,
   type PrecioBase,
-  type PrecioUsuario,
   type AsignacionConsultorio,
-  type Especialidad
+  type Especialidad,
+  type PlanificacionHorario
 } from '../lib/configuracionesService';
+
+export type { PlanificacionHorario };
+export { getMedicosSuplentesYRespaldoBySucursal };
 
 // ========================================
 // HOOK: COMPAÑÍAS
@@ -392,60 +396,6 @@ export function usePreciosBase() {
 }
 
 // ========================================
-// HOOK: PRECIOS USUARIO
-// ========================================
-
-export function usePreciosUsuario() {
-  const [preciosUsuario, setPreciosUsuario] = useState<PrecioUsuario[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadPreciosUsuario();
-  }, []);
-
-  const loadPreciosUsuario = async () => {
-    setIsLoading(true);
-    const data = await getAllPreciosUsuario();
-    setPreciosUsuario(data);
-    setIsLoading(false);
-  };
-
-  const agregarPrecioUsuario = async (precio: Omit<PrecioUsuario, 'id_precio_usuario' | 'created_at'>) => {
-    const nuevo = await createPrecioUsuario(precio);
-    if (nuevo) {
-      await loadPreciosUsuario();
-      return nuevo;
-    }
-    return null;
-  };
-
-  const actualizarPrecioUsuario = async (id: number, updates: Partial<PrecioUsuario>) => {
-    const success = await updatePrecioUsuario(id, updates);
-    if (success) {
-      await loadPreciosUsuario();
-    }
-    return success;
-  };
-
-  const eliminarPrecioUsuario = async (id: number) => {
-    const success = await deletePrecioUsuario(id);
-    if (success) {
-      await loadPreciosUsuario();
-    }
-    return success;
-  };
-
-  return {
-    preciosUsuario,
-    isLoading,
-    loadPreciosUsuario,
-    agregarPrecioUsuario,
-    actualizarPrecioUsuario,
-    eliminarPrecioUsuario
-  };
-}
-
-// ========================================
 // HOOK: ASIGNACIONES CONSULTORIO
 // ========================================
 
@@ -552,6 +502,67 @@ export function useEspecialidades() {
     agregarEspecialidad,
     actualizarEspecialidad,
     eliminarEspecialidad
+  };
+}
+
+// ========================================
+// HOOK - PLANIFICACIÓN HORARIO SUPLENTES
+// ========================================
+
+export function usePlanificacionHorario(
+  idUsuarioSucursal?: number,
+  fechaInicio?: string,
+  fechaFin?: string
+) {
+  const [planificaciones, setPlanificaciones] = useState<PlanificacionHorario[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (idUsuarioSucursal && fechaInicio && fechaFin) {
+      loadPlanificaciones();
+    } else {
+      setPlanificaciones([]);
+    }
+  }, [idUsuarioSucursal, fechaInicio, fechaFin]);
+
+  const loadPlanificaciones = async () => {
+    if (!idUsuarioSucursal || !fechaInicio || !fechaFin) return;
+    setIsLoading(true);
+    const data = await getPlanificacionesByUsuarioSucursal(idUsuarioSucursal, fechaInicio, fechaFin);
+    setPlanificaciones(data);
+    setIsLoading(false);
+  };
+
+  const agregarPlanificacion = async (
+    planificacion: Omit<PlanificacionHorario, 'id_planificacion' | 'created_at' | 'updated_at' | 'usuario_sucursal' | 'consultorio'>
+  ) => {
+    const nueva = await createPlanificacion(planificacion);
+    if (nueva) await loadPlanificaciones();
+    return nueva;
+  };
+
+  const actualizarPlanificacion = async (
+    id: number,
+    updates: Partial<Omit<PlanificacionHorario, 'id_planificacion' | 'created_at' | 'updated_at' | 'usuario_sucursal' | 'consultorio'>>
+  ) => {
+    const success = await updatePlanificacion(id, updates);
+    if (success) await loadPlanificaciones();
+    return success;
+  };
+
+  const eliminarPlanificacion = async (id: number) => {
+    const success = await deletePlanificacion(id);
+    if (success) await loadPlanificaciones();
+    return success;
+  };
+
+  return {
+    planificaciones,
+    isLoading,
+    loadPlanificaciones,
+    agregarPlanificacion,
+    actualizarPlanificacion,
+    eliminarPlanificacion
   };
 }
 

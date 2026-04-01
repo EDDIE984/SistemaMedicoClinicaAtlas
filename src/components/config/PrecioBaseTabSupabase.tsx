@@ -2,17 +2,49 @@
 import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Input } from '../ui/input';
 import { Plus, Pencil, Trash2, Loader2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePreciosBase, useCompanias, formatearMoneda } from '../../hooks/useConfiguraciones';
 import type { PrecioBase } from '../../lib/configuracionesService';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+
+const CARGOS = [
+  { value: 'MEDICO ESPECIALISTA', label: 'Médico Especialista' },
+  { value: 'MEDICO SUPLENTE', label: 'Médico Suplente' },
+  { value: 'MEDICO RESPALDO', label: 'Médico Respaldo' },
+];
+
+const normalizeText = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\p{Extended_Pictographic}|\uFE0F/gu, '')
+    .trim()
+    .toUpperCase();
+
+const normalizeAndUppercase = (text: string) => normalizeText(text);
+
+const getCargoCanonicalValue = (cargo: string) => {
+  if (!cargo) return '';
+  const cleaned = normalizeText(cargo);
+  const matched = CARGOS.find((item) => {
+    const itemLabel = normalizeText(item.label);
+    const itemValue = normalizeText(item.value);
+    return cleaned === itemValue || cleaned === itemLabel || itemLabel.includes(cleaned) || itemValue.includes(cleaned);
+  });
+  return matched?.value ?? cargo.trim();
+};
+
+const getCargoDisplayLabel = (cargo: string) => {
+  const canonical = getCargoCanonicalValue(cargo);
+  return CARGOS.find((item) => item.value === canonical)?.label ?? cargo.replace(/\p{Extended_Pictographic}|\uFE0F/gu, '').trim();
+};
 
 export function PrecioBaseTabSupabase() {
   const { preciosBase, isLoading, agregarPrecioBase, actualizarPrecioBase, eliminarPrecioBase } = usePreciosBase();
@@ -26,7 +58,7 @@ export function PrecioBaseTabSupabase() {
 
   const [formData, setFormData] = useState({
     id_compania: 0,
-    especialidad: '',
+    cargo: '',
     precio_consulta: 0,
     precio_control: 0,
     precio_emergencia: 0,
@@ -36,7 +68,7 @@ export function PrecioBaseTabSupabase() {
   const handleNuevo = () => {
     setFormData({
       id_compania: companias[0]?.id_compania || 0,
-      especialidad: '',
+      cargo: '',
       precio_consulta: 0,
       precio_control: 0,
       precio_emergencia: 0,
@@ -50,7 +82,7 @@ export function PrecioBaseTabSupabase() {
   const handleEditar = (precio: PrecioBase) => {
     setFormData({
       id_compania: precio.id_compania,
-      especialidad: precio.especialidad,
+      cargo: getCargoCanonicalValue(precio.cargo),
       precio_consulta: precio.precio_consulta,
       precio_control: precio.precio_control,
       precio_emergencia: precio.precio_emergencia,
@@ -62,8 +94,8 @@ export function PrecioBaseTabSupabase() {
   };
 
   const handleGuardar = async () => {
-    if (!formData.especialidad.trim()) {
-      toast.error('La especialidad es requerida');
+    if (!formData.cargo.trim()) {
+      toast.error('El cargo es requerido');
       return;
     }
 
@@ -79,11 +111,11 @@ export function PrecioBaseTabSupabase() {
 
     const datos = {
       id_compania: formData.id_compania,
-      especialidad: formData.especialidad.trim(),
+      cargo: getCargoCanonicalValue(formData.cargo),
       precio_consulta: formData.precio_consulta,
       precio_control: formData.precio_control,
       precio_emergencia: formData.precio_emergencia,
-      estado: formData.estado
+      estado: formData.estado as 'activo' | 'inactivo'
     };
 
     if (isEditing && precioActual) {
@@ -129,9 +161,9 @@ export function PrecioBaseTabSupabase() {
         <div>
           <h2 className="flex items-center gap-2">
             <Tag className="size-5" />
-            Precios Base por Especialidad
+            Precios Base por Cargo
           </h2>
-          <p className="text-sm text-gray-600">Define los precios base por especialidad</p>
+          <p className="text-sm text-gray-600">Define los precios base por cargo del médico</p>
         </div>
         <Button onClick={handleNuevo} disabled={companias.length === 0}>
           <Plus className="size-4 mr-2" />
@@ -156,7 +188,7 @@ export function PrecioBaseTabSupabase() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Especialidad</TableHead>
+                <TableHead>Cargo</TableHead>
                 <TableHead className="text-right">Consulta</TableHead>
                 <TableHead className="text-right">Control</TableHead>
                 <TableHead className="text-right">Emergencia</TableHead>
@@ -174,7 +206,7 @@ export function PrecioBaseTabSupabase() {
               ) : (
                 preciosBase.map((precio, index) => (
                   <TableRow key={precio.id_precio_base || `precio-${index}`}>
-                    <TableCell className="font-semibold">{precio.especialidad}</TableCell>
+                    <TableCell className="font-semibold">{getCargoDisplayLabel(precio.cargo)}</TableCell>
                     <TableCell className="text-right text-green-600">{formatearMoneda(precio.precio_consulta)}</TableCell>
                     <TableCell className="text-right text-green-600">{formatearMoneda(precio.precio_control)}</TableCell>
                     <TableCell className="text-right text-green-600">{formatearMoneda(precio.precio_emergencia)}</TableCell>
@@ -207,7 +239,7 @@ export function PrecioBaseTabSupabase() {
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Editar Precio Base' : 'Nuevo Precio Base'}</DialogTitle>
             <DialogDescription>
-              {isEditing ? 'Modifica los datos del precio base' : 'Define precios base para una especialidad'}
+              {isEditing ? 'Modifica los datos del precio base' : 'Define precios base para un cargo de médico'}
             </DialogDescription>
           </DialogHeader>
 
@@ -216,7 +248,7 @@ export function PrecioBaseTabSupabase() {
               <Label>Compañía *</Label>
               <Select
                 value={formData.id_compania.toString()}
-                onValueChange={(value) => setFormData({ ...formData, id_compania: parseInt(value) })}
+                onValueChange={(value: string) => setFormData({ ...formData, id_compania: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -232,12 +264,20 @@ export function PrecioBaseTabSupabase() {
             </div>
 
             <div className="space-y-2">
-              <Label>Especialidad *</Label>
-              <Input
-                value={formData.especialidad}
-                onChange={(e) => setFormData({ ...formData, especialidad: e.target.value })}
-                placeholder="Ej: Pediatría, Cardiología"
-              />
+              <Label>Cargo *</Label>
+              <Select
+                value={formData.cargo}
+                onValueChange={(value: string) => setFormData({ ...formData, cargo: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione un cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CARGOS.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -278,7 +318,7 @@ export function PrecioBaseTabSupabase() {
 
             <div className="space-y-2">
               <Label>Estado</Label>
-              <Select value={formData.estado} onValueChange={(value) => setFormData({ ...formData, estado: value })}>
+              <Select value={formData.estado} onValueChange={(value: string) => setFormData({ ...formData, estado: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -307,7 +347,7 @@ export function PrecioBaseTabSupabase() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará el precio base para la especialidad "{precioAEliminar?.especialidad}".
+              Esta acción eliminará el precio base para el cargo "{precioAEliminar?.cargo}".
               Esta acción no se puede deshacer y puede fallar si existen registros asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>

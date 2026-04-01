@@ -11,6 +11,8 @@ export interface ConsultaMedica {
   receta_medica: string | null;
   pedido_examenes: string | null;
   observaciones: string | null;
+  fecha_seguimiento: string | null;
+  pedido_hospitalizacion: string | null;
   created_at?: string;
   updated_at?: string;
 }
