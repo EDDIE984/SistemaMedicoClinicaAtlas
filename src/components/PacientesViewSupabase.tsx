@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { usePacientes, useSignosVitales, calcularIMC, calcularEdad, getIniciales } from '../hooks/usePacientes';
 import type { Paciente, SignoVital, ArchivoMedico } from '../lib/pacientesService';
 import { getArchivosByPaciente, createArchivoMedico, deleteArchivoMedico, getAntecedentesByPaciente, saveAntecedente } from '../lib/pacientesService';
-import { getCitasByPaciente, formatearFecha, formatearHora, getColorEstado, marcarCitaCompletada, type CitaCompleta } from '../lib/citasService';
+import { getCitasByPaciente, formatearFecha, formatearHora, getColorEstado, marcarCitaCompletada, updateCita, type CitaCompleta } from '../lib/citasService';
 import { crearConsultaMedica, getConsultaMedicaByCita, type ConsultaMedica } from '../lib/consultasService.ts';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -136,6 +136,10 @@ export function PacientesViewSupabase({
 
   // Estado para controlar qué citas están expandidas en el historial
   const [citasExpandidas, setCitasExpandidas] = useState<Set<number>>(new Set());
+
+  // Estado para confirmación de No Asistió
+  const [citaParaNoAsistio, setCitaParaNoAsistio] = useState<number | null>(null);
+  const [isNoAsistioConfirmOpen, setIsNoAsistioConfirmOpen] = useState(false);
 
   // Estado para controlar el índice de signos vitales visible para cada paciente
   const [signosVitalesIndex, setSignosVitalesIndex] = useState<Record<number, number>>({});
@@ -610,6 +614,33 @@ export function PacientesViewSupabase({
   const handleVerConsulta = (consulta: ConsultaMedica) => {
     setConsultaSeleccionada(consulta);
     setIsVerConsultaDialogOpen(true);
+  };
+
+  // Abrir confirmación de No Asistió
+  const handleMarcarNoAsistio = (citaId: number) => {
+    setCitaParaNoAsistio(citaId);
+    setIsNoAsistioConfirmOpen(true);
+  };
+
+  // Confirmar y ejecutar el cambio de estado a no_asistio
+  const handleConfirmarNoAsistio = async () => {
+    if (!citaParaNoAsistio || !selectedPatientId) return;
+    try {
+      const success = await updateCita(citaParaNoAsistio, { estado_cita: 'no_asistio' });
+      if (success) {
+        toast.success('Cita marcada como No Asistió');
+        const citasActualizadas = await getCitasByPaciente(selectedPatientId);
+        setCitasPaciente(citasActualizadas);
+      } else {
+        toast.error('Error al actualizar el estado de la cita');
+      }
+    } catch (error) {
+      console.error('❌ Error al marcar no asistió:', error);
+      toast.error('Error inesperado al actualizar la cita');
+    } finally {
+      setIsNoAsistioConfirmOpen(false);
+      setCitaParaNoAsistio(null);
+    }
   };
 
   // Guardar o actualizar antecedentes del paciente
@@ -1269,7 +1300,7 @@ export function PacientesViewSupabase({
                               {/* Botones de acción */}
                               <div className="pt-3 border-t space-y-2">
                                 {/* Botón Iniciar Consulta para citas pendientes */}
-                                {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && (
+                                {!cita.consulta_realizada && cita.estado_cita !== 'cancelada' && cita.estado_cita !== 'no_asistio' && (
                                   <Button
                                     size="sm"
                                     className="w-full bg-blue-600 hover:bg-blue-700 text-white"
@@ -1280,14 +1311,27 @@ export function PacientesViewSupabase({
                                   </Button>
                                 )}
 
+                                {/* Botón No Asistió */}
+                                {cita.estado_cita !== 'cancelada' && !cita.consulta_realizada && (
+                                  <Button
+                                    size="sm"
+                                    className="w-full bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                                    disabled={cita.estado_cita === 'no_asistio'}
+                                    onClick={() => handleMarcarNoAsistio(cita.id_cita)}
+                                  >
+                                    <span className="mr-2">✗</span>
+                                    No Asistió
+                                  </Button>
+                                )}
+
                                 {/* Botón Ver para todas las citas */}
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="w-full"
                                   onClick={() => consulta ? handleVerConsulta(consulta) : null}
-                                  disabled={cita.estado_cita === 'agendada' || !consulta}
-                                  title={cita.estado_cita === 'agendada' ? "Disponible solo para citas atendidas" : consulta ? "Ver detalles de la consulta" : "No hay consulta registrada"}
+                                  disabled={cita.estado_cita === 'agendada' || cita.estado_cita === 'no_asistio' || !consulta}
+                                  title={cita.estado_cita === 'no_asistio' ? "No disponible para citas con No Asistió" : cita.estado_cita === 'agendada' ? "Disponible solo para citas atendidas" : consulta ? "Ver detalles de la consulta" : "No hay consulta registrada"}
                                 >
                                   <FileText className="size-3 mr-2" />
                                   Ver Detalles
@@ -1915,6 +1959,37 @@ export function PacientesViewSupabase({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmación No Asistió */}
+      <Dialog open={isNoAsistioConfirmOpen} onOpenChange={setIsNoAsistioConfirmOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <span>⚠</span> Confirmar No Asistió
+            </DialogTitle>
+            <DialogDescription>
+              ¿Está seguro de que el paciente no asistió a esta cita? Esta acción cambiará el estado a <strong>No Asistió</strong> y no podrá revertirse desde esta pantalla.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsNoAsistioConfirmOpen(false);
+                setCitaParaNoAsistio(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleConfirmarNoAsistio}
+            >
+              Sí, No Asistió
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
