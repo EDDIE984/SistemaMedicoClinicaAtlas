@@ -53,10 +53,10 @@ export async function getConsultaMedicaByCita(idCita: number): Promise<ConsultaM
       .from('consulta_medica')
       .select('*')
       .eq('id_cita', idCita)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // No hay consulta médica para esta cita (es normal)
+      console.error('❌ Error al obtener consulta médica:', error);
       return null;
     }
 
