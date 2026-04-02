@@ -1,5 +1,5 @@
 // Hook personalizado para gestión de pacientes con Supabase
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getAllPacientes,
   getPacientesByCompania,
@@ -12,6 +12,7 @@ import {
   deletePaciente,
   getSignosVitalesByPaciente,
   createSignoVital,
+  getAlertasBySignoVital,
   getAntecedentesByPaciente,
   createAntecedente,
   updateAntecedente,
@@ -23,6 +24,7 @@ import {
   getIniciales,
   type Paciente,
   type SignoVital,
+  type AlertaSignoVital,
   type Antecedente,
   type ArchivoMedico
 } from '../lib/pacientesService';
@@ -154,38 +156,53 @@ export function usePacientes(idCompania?: number, options: { initialLoad?: boole
 
 export function useSignosVitales(idPaciente: number | null) {
   const [signosVitales, setSignosVitales] = useState<SignoVital[]>([]);
+  const [alertasActuales, setAlertasActuales] = useState<AlertaSignoVital[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (idPaciente) {
-      loadSignosVitales();
-    }
-  }, [idPaciente]);
+  // Declarado primero porque loadSignosVitales depende de él
+  const loadAlertasForSigno = useCallback(async (id_signo_vital: number) => {
+    const alertas = await getAlertasBySignoVital(id_signo_vital);
+    setAlertasActuales(alertas);
+  }, []);
 
-  const loadSignosVitales = async () => {
+  const loadSignosVitales = useCallback(async () => {
     if (!idPaciente) return;
 
     setIsLoading(true);
     const data = await getSignosVitalesByPaciente(idPaciente);
     setSignosVitales(data);
     setIsLoading(false);
-  };
 
-  const guardarSignoVital = async (signo: Omit<SignoVital, 'id_signo_vital' | 'created_at'>) => {
+    if (data.length > 0) {
+      await loadAlertasForSigno(data[0].id_signo_vital);
+    } else {
+      setAlertasActuales([]);
+    }
+  }, [idPaciente, loadAlertasForSigno]);
+
+  const guardarSignoVital = useCallback(async (signo: Omit<SignoVital, 'id_signo_vital' | 'created_at'>) => {
     const nuevoSigno = await createSignoVital(signo);
 
     if (nuevoSigno) {
-      await loadSignosVitales(); // Recargar lista
+      await loadSignosVitales();
       return nuevoSigno;
     }
 
     return null;
-  };
+  }, [loadSignosVitales]);
+
+  useEffect(() => {
+    if (idPaciente) {
+      loadSignosVitales();
+    }
+  }, [idPaciente, loadSignosVitales]);
 
   return {
     signosVitales,
+    alertasActuales,
     isLoading,
     loadSignosVitales,
+    loadAlertasForSigno,
     guardarSignoVital
   };
 }

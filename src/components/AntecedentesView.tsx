@@ -7,7 +7,7 @@ import { Button } from './ui/button';
 import { Plus, X, Save } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Textarea } from './ui/textarea';
-import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface VaccinationGroup {
   age: string;
@@ -69,6 +69,163 @@ const vaccinationSchedule: VaccinationGroup[] = [
   },
 ];
 
+type SiNoValue = 'si' | 'no' | '';
+
+interface AntecedentesPatologicosPersonales {
+  clinicos: {
+    diabetes: SiNoValue;
+    tiroideas: SiNoValue;
+    hipertension: SiNoValue;
+    cardiopatias: SiNoValue;
+    cancer: SiNoValue;
+    tuberculosis: SiNoValue;
+    respiratorias: SiNoValue;
+    gastrointestinales: SiNoValue;
+    ets: SiNoValue;
+    renalCronica: SiNoValue;
+  };
+  quirurgicos: {
+    hospitalizacion: SiNoValue;
+    cirugias: SiNoValue;
+    traumatismos: SiNoValue;
+    transfusiones: SiNoValue;
+  };
+  notaLibreDoctor: string;
+}
+
+interface AntecedentesPatologicosFamiliares {
+  items: string[];
+}
+
+const getDefaultAntecedentesPatologicos = (): AntecedentesPatologicosPersonales => ({
+  clinicos: {
+    diabetes: '',
+    tiroideas: '',
+    hipertension: '',
+    cardiopatias: '',
+    cancer: '',
+    tuberculosis: '',
+    respiratorias: '',
+    gastrointestinales: '',
+    ets: '',
+    renalCronica: '',
+  },
+  quirurgicos: {
+    hospitalizacion: '',
+    cirugias: '',
+    traumatismos: '',
+    transfusiones: '',
+  },
+  notaLibreDoctor: '',
+});
+
+const normalizarAntecedentesPatologicos = (raw: any): AntecedentesPatologicosPersonales => {
+  const defaults = getDefaultAntecedentesPatologicos();
+  if (!raw || typeof raw !== 'object') return defaults;
+
+  if (raw.clinicos && raw.quirurgicos) {
+    return {
+      clinicos: {
+        ...defaults.clinicos,
+        ...raw.clinicos,
+      },
+      quirurgicos: {
+        ...defaults.quirurgicos,
+        ...raw.quirurgicos,
+      },
+      notaLibreDoctor: typeof raw.notaLibreDoctor === 'string' ? raw.notaLibreDoctor : '',
+    };
+  }
+
+  // Compatibilidad con forma previa en caso de datos existentes.
+  return {
+    clinicos: {
+      diabetes: raw.diabetes || '',
+      tiroideas: raw.tiroideas || '',
+      hipertension: raw.hipertension || '',
+      cardiopatias: raw.cardiopatias || '',
+      cancer: raw.cancer || '',
+      tuberculosis: raw.tuberculosis || '',
+      respiratorias: raw.respiratorias || '',
+      gastrointestinales: raw.gastrointestinales || '',
+      ets: raw.ets || '',
+      renalCronica: raw.renalCronica || '',
+    },
+    quirurgicos: {
+      hospitalizacion: raw.hospitalizacion || '',
+      cirugias: raw.cirugias || '',
+      traumatismos: raw.traumatismos || '',
+      transfusiones: raw.transfusiones || '',
+    },
+    notaLibreDoctor: typeof raw.notaLibreDoctor === 'string' ? raw.notaLibreDoctor : '',
+  };
+};
+
+const getDefaultAntecedentesPatologicosFamiliares = (): AntecedentesPatologicosFamiliares => ({
+  items: [],
+});
+
+const normalizarAntecedentesPatologicosFamiliares = (raw: any): AntecedentesPatologicosFamiliares => {
+  const defaults = getDefaultAntecedentesPatologicosFamiliares();
+
+  if (!raw) return defaults;
+
+  if (Array.isArray(raw)) {
+    return {
+      items: raw.filter((item) => typeof item === 'string' && item.trim() !== ''),
+    };
+  }
+
+  if (typeof raw === 'object' && Array.isArray(raw.items)) {
+    return {
+      items: raw.items.filter((item) => typeof item === 'string' && item.trim() !== ''),
+    };
+  }
+
+  // Compatibilidad con formato legacy si/no: se inicializa vacio por decision funcional.
+  return defaults;
+};
+
+const getDefaultAntecedentesGineco = () => ({
+  primeraMenstruacion: '',
+  ultimaMenstruacion: '',
+  caracteristicasMenstruacion: '',
+  embarazos: '',
+  cancerCervico: '',
+  cancerUterino: '',
+  cancerMama: '',
+  actividadSexual: '',
+  metodoPlanificacion: '',
+  terapiaHormonal: '',
+  ultimoPapanicolau: '',
+  ultimaMastografia: '',
+  otros: '',
+  gestas: '',
+  partos: '',
+  cesareas: '',
+  abortos: '',
+  hijosVivos: '',
+  fechaUltimaMenstruacion: '',
+  menarquia: '',
+  metodoAnticonceptivo: '',
+  metodoAnticonceptivoOtro: '',
+  actividadSexualObservacion: '',
+});
+
+const normalizarAntecedentesGineco = (raw: any) => {
+  const defaults = getDefaultAntecedentesGineco();
+  if (!raw || typeof raw !== 'object') return defaults;
+
+  return {
+    ...defaults,
+    ...raw,
+    fechaUltimaMenstruacion: raw.fechaUltimaMenstruacion || raw.ultimaMenstruacion || '',
+    metodoAnticonceptivo: raw.metodoAnticonceptivo || raw.metodoPlanificacion || '',
+    menarquia: raw.menarquia || '',
+    actividadSexualObservacion: raw.actividadSexualObservacion || '',
+  };
+};
+
 interface AntecedentesViewProps {
   pacienteId: string;
   pacienteNombre: string;
@@ -78,9 +235,9 @@ interface AntecedentesViewProps {
       hasOtherVaccines: boolean | null;
     };
     alergias?: string[];
-    antecedentesPatologicos?: Record<string, string>;
+    antecedentesPatologicos?: AntecedentesPatologicosPersonales | Record<string, string>;
     antecedentesNoPatologicos?: Record<string, string>;
-    antecedentesHeredofamiliares?: Record<string, string>;
+    antecedentesHeredofamiliares?: AntecedentesPatologicosFamiliares | Record<string, string> | string[];
     antecedentesGineco?: Record<string, any>;
     antecedentesperinatales?: Record<string, any>;
     antecedentesPostnatales?: Record<string, any>;
@@ -117,24 +274,8 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
   const [nuevoMedicamento, setNuevoMedicamento] = useState('');
   
   // Estados para Antecedentes Patológicos
-  const [antecedentesPatologicos, setAntecedentesPatologicos] = useState<Record<string, string>>(
-    antecedentes?.antecedentesPatologicos || {
-      hospitalizacion: '',
-      cirugias: '',
-      diabetes: '',
-      tiroideas: '',
-      hipertension: '',
-      cardiopatias: '',
-      traumatismos: '',
-      cancer: '',
-      tuberculosis: '',
-      transfusiones: '',
-      respiratorias: '',
-      gastrointestinales: '',
-      ets: '',
-      renalCronica: '',
-      otros: '',
-    }
+  const [antecedentesPatologicos, setAntecedentesPatologicos] = useState<AntecedentesPatologicosPersonales>(
+    normalizarAntecedentesPatologicos(antecedentes?.antecedentesPatologicos)
   );
 
   // Estados para Antecedentes No Patológicos
@@ -149,35 +290,15 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
     }
   );
 
-  // Estados para Antecedentes Heredofamiliares
-  const [antecedentesHeredofamiliares, setAntecedentesHeredofamiliares] = useState<Record<string, string>>(
-    antecedentes?.antecedentesHeredofamiliares || {
-      diabetes: '',
-      cardiopatias: '',
-      hipertension: '',
-      tiroideas: '',
-      renalCronica: '',
-      otros: '',
-    }
+  // Estados para Antecedentes Patologicos Familiares
+  const [antecedentesHeredofamiliares, setAntecedentesHeredofamiliares] = useState<AntecedentesPatologicosFamiliares>(
+    normalizarAntecedentesPatologicosFamiliares(antecedentes?.antecedentesHeredofamiliares)
   );
+  const [nuevoAntecedenteFamiliar, setNuevoAntecedenteFamiliar] = useState('');
 
   // Estados para Antecedentes Gineco-Obstétricos
   const [antecedentesGineco, setAntecedentesGineco] = useState(
-    antecedentes?.antecedentesGineco || {
-      primeraMenstruacion: '',
-      ultimaMenstruacion: '',
-      caracteristicasMenstruacion: '',
-      embarazos: '',
-      cancerCervico: '',
-      cancerUterino: '',
-      cancerMama: '',
-      actividadSexual: '',
-      metodoPlanificacion: '',
-      terapiaHormonal: '',
-      ultimoPapanicolau: '',
-      ultimaMastografia: '',
-      otros: '',
-    }
+    normalizarAntecedentesGineco(antecedentes?.antecedentesGineco)
   );
 
   // Estados para Antecedentes Perinatales
@@ -268,7 +389,7 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
       
       // Actualizar antecedentes patológicos
       if (antecedentes.antecedentesPatologicos) {
-        setAntecedentesPatologicos(antecedentes.antecedentesPatologicos);
+        setAntecedentesPatologicos(normalizarAntecedentesPatologicos(antecedentes.antecedentesPatologicos));
       }
       
       // Actualizar antecedentes no patológicos
@@ -278,12 +399,12 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
       
       // Actualizar antecedentes heredofamiliares
       if (antecedentes.antecedentesHeredofamiliares) {
-        setAntecedentesHeredofamiliares(antecedentes.antecedentesHeredofamiliares);
+        setAntecedentesHeredofamiliares(normalizarAntecedentesPatologicosFamiliares(antecedentes.antecedentesHeredofamiliares));
       }
       
       // Actualizar antecedentes gineco-obstétricos
       if (antecedentes.antecedentesGineco) {
-        setAntecedentesGineco(antecedentes.antecedentesGineco);
+        setAntecedentesGineco(normalizarAntecedentesGineco(antecedentes.antecedentesGineco));
       }
       
       // Actualizar antecedentes perinatales
@@ -394,6 +515,39 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
 
   const handleGuardarAntecedentesHeredofamiliares = () => {
     onActualizarAntecedentes?.(pacienteId, 'antecedentesHeredofamiliares', antecedentesHeredofamiliares);
+  };
+
+  const handleAddAntecedenteFamiliar = () => {
+    const nuevo = nuevoAntecedenteFamiliar.trim();
+    if (!nuevo) return;
+
+    const existe = antecedentesHeredofamiliares.items.some(
+      (item) => item.toLowerCase() === nuevo.toLowerCase()
+    );
+    if (existe) {
+      setNuevoAntecedenteFamiliar('');
+      return;
+    }
+
+    setAntecedentesHeredofamiliares((prev) => ({
+      ...prev,
+      items: [...prev.items, nuevo],
+    }));
+    setNuevoAntecedenteFamiliar('');
+  };
+
+  const handleRemoveAntecedenteFamiliar = (index: number) => {
+    setAntecedentesHeredofamiliares((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleKeyPressAntecedenteFamiliar = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddAntecedenteFamiliar();
+    }
   };
 
   const handleGuardarAntecedentesGineco = () => {
@@ -583,323 +737,101 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
         {/* Antecedentes Patológicos */}
         <AccordionItem value="antecedentes-patologicos" className="border rounded-lg px-4 bg-orange-50">
           <AccordionTrigger className="hover:no-underline">
-            <h3 className="text-gray-900">Antecedentes Patológicos</h3>
+            <h3 className="text-gray-900">Antecedentes patológicos personales</h3>
           </AccordionTrigger>
           <AccordionContent>
             <div className="pt-2 space-y-3">
-              {/* Hospitalización Previa */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Hospitalización Previa</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.hospitalizacion}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, hospitalizacion: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="hosp-si" />
-                    <Label htmlFor="hosp-si" className="text-sm cursor-pointer">Sí</Label>
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-800">Clínicos</h4>
+                {([
+                  ['diabetes', 'Diabetes'],
+                  ['tiroideas', 'Enfermedades Tiroideas'],
+                  ['hipertension', 'Hipertensión Arterial'],
+                  ['cardiopatias', 'Cardiopatías'],
+                  ['cancer', 'Cáncer'],
+                  ['tuberculosis', 'Tuberculosis'],
+                  ['respiratorias', 'Patologías Respiratorias'],
+                  ['gastrointestinales', 'Patologías Gastrointestinales'],
+                  ['ets', 'Enfermedades de Transmisión Sexual'],
+                  ['renalCronica', 'Enfermedad Renal Crónica'],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="flex items-center justify-between py-2 border-b">
+                    <Label className="text-sm text-gray-700">{label}</Label>
+                    <RadioGroup
+                      value={antecedentesPatologicos.clinicos[key]}
+                      onValueChange={(value: string) =>
+                        setAntecedentesPatologicos((prev) => ({
+                          ...prev,
+                          clinicos: {
+                            ...prev.clinicos,
+                            [key]: value as SiNoValue,
+                          },
+                        }))
+                      }
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="si" id={`${key}-si`} />
+                        <Label htmlFor={`${key}-si`} className="text-sm cursor-pointer">Sí</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="no" id={`${key}-no`} />
+                        <Label htmlFor={`${key}-no`} className="text-sm cursor-pointer">No</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="hosp-no" />
-                    <Label htmlFor="hosp-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+                ))}
               </div>
 
-              {/* Cirugías Previas */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cirugías Previas</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.cirugias}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, cirugias: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="cirug-si" />
-                    <Label htmlFor="cirug-si" className="text-sm cursor-pointer">Sí</Label>
+              <div className="space-y-2 pt-2">
+                <h4 className="text-sm font-medium text-gray-800">Quirúrgicos</h4>
+                {([
+                  ['hospitalizacion', 'Hospitalización Previa'],
+                  ['cirugias', 'Cirugías Previas'],
+                  ['traumatismos', 'Traumatismos'],
+                  ['transfusiones', 'Transfusiones'],
+                ] as const).map(([key, label]) => (
+                  <div key={key} className="flex items-center justify-between py-2 border-b">
+                    <Label className="text-sm text-gray-700">{label}</Label>
+                    <RadioGroup
+                      value={antecedentesPatologicos.quirurgicos[key]}
+                      onValueChange={(value: string) =>
+                        setAntecedentesPatologicos((prev) => ({
+                          ...prev,
+                          quirurgicos: {
+                            ...prev.quirurgicos,
+                            [key]: value as SiNoValue,
+                          },
+                        }))
+                      }
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="si" id={`${key}-si`} />
+                        <Label htmlFor={`${key}-si`} className="text-sm cursor-pointer">Sí</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="no" id={`${key}-no`} className="text-sm cursor-pointer" />
+                        <Label htmlFor={`${key}-no`} className="text-sm cursor-pointer">No</Label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="cirug-no" />
-                    <Label htmlFor="cirug-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+                ))}
               </div>
 
-              {/* Diabetes */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Diabetes</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.diabetes}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, diabetes: value })
+              <div className="pt-2">
+                <Label className="text-sm text-gray-700 mb-2 block">Nota libre del doctor</Label>
+                <Textarea
+                  value={antecedentesPatologicos.notaLibreDoctor}
+                  onChange={(e) =>
+                    setAntecedentesPatologicos((prev) => ({
+                      ...prev,
+                      notaLibreDoctor: e.target.value,
+                    }))
                   }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="diab-si" />
-                    <Label htmlFor="diab-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="diab-no" />
-                    <Label htmlFor="diab-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Enfermedades Tiroideas */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Enfermedades Tiroideas</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.tiroideas}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, tiroideas: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="tiro-si" />
-                    <Label htmlFor="tiro-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="tiro-no" />
-                    <Label htmlFor="tiro-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Hipertensión Arterial */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Hipertensión Arterial</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.hipertension}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, hipertension: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="hiper-si" />
-                    <Label htmlFor="hiper-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="hiper-no" />
-                    <Label htmlFor="hiper-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Cardiopatias */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cardiopatias</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.cardiopatias}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, cardiopatias: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="cardio-si" />
-                    <Label htmlFor="cardio-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="cardio-no" />
-                    <Label htmlFor="cardio-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Traumatismos */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Traumatismos</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.traumatismos}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, traumatismos: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="trauma-si" />
-                    <Label htmlFor="trauma-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="trauma-no" />
-                    <Label htmlFor="trauma-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Cáncer */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cáncer</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.cancer}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, cancer: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="cancer-si" />
-                    <Label htmlFor="cancer-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="cancer-no" />
-                    <Label htmlFor="cancer-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Tuberculosis */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Tuberculosis</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.tuberculosis}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, tuberculosis: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="tuber-si" />
-                    <Label htmlFor="tuber-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="tuber-no" />
-                    <Label htmlFor="tuber-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Transfusiones */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Transfusiones</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.transfusiones}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, transfusiones: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="transf-si" />
-                    <Label htmlFor="transf-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="transf-no" />
-                    <Label htmlFor="transf-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Patologías Respiratorias */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Patologías Respiratorias</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.respiratorias}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, respiratorias: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="resp-si" />
-                    <Label htmlFor="resp-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="resp-no" />
-                    <Label htmlFor="resp-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Patologías Gastrointestinales */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Patologías Gastrointestinales</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.gastrointestinales}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, gastrointestinales: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="gastro-si" />
-                    <Label htmlFor="gastro-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="gastro-no" />
-                    <Label htmlFor="gastro-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Enfermedades de Transmisión Sexual */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Enfermedades de Transmisión Sexual</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.ets}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, ets: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="ets-si" />
-                    <Label htmlFor="ets-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="ets-no" />
-                    <Label htmlFor="ets-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Enfermedad Renal Crónica */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Enfermedad Renal Crónica</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.renalCronica}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, renalCronica: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="renal-si" />
-                    <Label htmlFor="renal-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="renal-no" />
-                    <Label htmlFor="renal-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Otros */}
-              <div className="flex items-center justify-between py-2">
-                <Label className="text-sm text-gray-700">Otros</Label>
-                <RadioGroup
-                  value={antecedentesPatologicos.otros}
-                  onValueChange={(value: string) => 
-                    setAntecedentesPatologicos({ ...antecedentesPatologicos, otros: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="otros-si" />
-                    <Label htmlFor="otros-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="otros-no" />
-                    <Label htmlFor="otros-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+                  placeholder="Detalle clínico o quirúrgico adicional del paciente..."
+                  className="min-h-[90px]"
+                />
               </div>
 
               {/* Botón de Guardar */}
@@ -917,10 +849,10 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
           </AccordionContent>
         </AccordionItem>
 
-        {/* Antecedentes No Patológicos */}
+        {/* Hábitos */}
         <AccordionItem value="antecedentes-no-patologicos" className="border rounded-lg px-4 bg-green-50">
           <AccordionTrigger className="hover:no-underline">
-            <h3 className="text-gray-900">Antecedentes No Patológicos</h3>
+            <h3 className="text-gray-900">Hábitos</h3>
           </AccordionTrigger>
           <AccordionContent>
             <div className="pt-2 space-y-3">
@@ -1032,22 +964,14 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
               {/* Otros */}
               <div className="flex items-center justify-between py-2">
                 <Label className="text-sm text-gray-700">Otros</Label>
-                <RadioGroup
+                <Input
                   value={antecedentesNoPatologicos.otros}
-                  onValueChange={(value: string) => 
-                    setAntecedentesNoPatologicos({ ...antecedentesNoPatologicos, otros: value })
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    setAntecedentesNoPatologicos({ ...antecedentesNoPatologicos, otros: e.target.value })
                   }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="otros-nopat-si" />
-                    <Label htmlFor="otros-nopat-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="otros-nopat-no" />
-                    <Label htmlFor="otros-nopat-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+                  placeholder="Escriba otros hábitos"
+                  className="w-64"
+                />
               </div>
 
               {/* Botón de Guardar */}
@@ -1065,138 +989,57 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
           </AccordionContent>
         </AccordionItem>
 
-        {/* Antecedentes Heredofamiliares */}
+        {/* Antecedentes Patologicos Familiares */}
         <AccordionItem value="antecedentes-heredofamiliares" className="border rounded-lg px-4 bg-purple-50">
           <AccordionTrigger className="hover:no-underline">
-            <h3 className="text-gray-900">Antecedentes Heredofamiliares</h3>
+            <h3 className="text-gray-900">Antecedentes patológicos familiares</h3>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="pt-2 space-y-3">
-              {/* Diabetes */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Diabetes</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.diabetes}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, diabetes: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="diab-her-si" />
-                    <Label htmlFor="diab-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="diab-her-no" />
-                    <Label htmlFor="diab-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+            <div className="pt-2 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm text-gray-700">Agregar antecedente familiar</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={nuevoAntecedenteFamiliar}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNuevoAntecedenteFamiliar(e.target.value)}
+                    onKeyDown={handleKeyPressAntecedenteFamiliar}
+                    placeholder="Ej: Diabetes tipo 2 en madre"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddAntecedenteFamiliar}
+                    className="shrink-0"
+                  >
+                    <Plus className="size-4 mr-2" />
+                    Agregar
+                  </Button>
+                </div>
               </div>
 
-              {/* Cardiopatias */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cardiopatias</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.cardiopatias}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, cardiopatias: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="cardio-her-si" />
-                    <Label htmlFor="cardio-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="cardio-her-no" />
-                    <Label htmlFor="cardio-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Hipertensión Arterial */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Hipertensión Arterial</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.hipertension}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, hipertension: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="hiper-her-si" />
-                    <Label htmlFor="hiper-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="hiper-her-no" />
-                    <Label htmlFor="hiper-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Enfermedades Tiroideas */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Enfermedades Tiroideas</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.tiroideas}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, tiroideas: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="tiro-her-si" />
-                    <Label htmlFor="tiro-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="tiro-her-no" />
-                    <Label htmlFor="tiro-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Enfermedad Renal Crónica */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Enfermedad Renal Crónica</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.renalCronica}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, renalCronica: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="renal-her-si" />
-                    <Label htmlFor="renal-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="renal-her-no" />
-                    <Label htmlFor="renal-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Otros */}
-              <div className="flex items-center justify-between py-2">
-                <Label className="text-sm text-gray-700">Otros</Label>
-                <RadioGroup
-                  value={antecedentesHeredofamiliares.otros}
-                  onValueChange={(value: string) => 
-                    setAntecedentesHeredofamiliares({ ...antecedentesHeredofamiliares, otros: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="otros-her-si" />
-                    <Label htmlFor="otros-her-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="otros-her-no" />
-                    <Label htmlFor="otros-her-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
+              {antecedentesHeredofamiliares.items.length === 0 ? (
+                <div className="text-sm text-gray-500 py-2 border rounded-md px-3 bg-white">
+                  No hay antecedentes familiares registrados.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {antecedentesHeredofamiliares.items.map((antecedente, index) => (
+                    <div key={`${antecedente}-${index}`} className="flex items-center justify-between gap-2 py-2 px-3 border rounded-md bg-white">
+                      <span className="text-sm text-gray-700">{antecedente}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveAntecedenteFamiliar(index)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        aria-label="Eliminar antecedente"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Botón de Guardar */}
               <div className="pt-4 border-t mt-4">
@@ -1219,219 +1062,148 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
             <h3 className="text-gray-900">Antecedentes Gineco-Obstétricos</h3>
           </AccordionTrigger>
           <AccordionContent>
-            <div className="pt-4 space-y-6">
-              {/* Primera Menstruación */}
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Primera Menstruación</Label>
-                <Input
-                  type="date"
-                  value={antecedentesGineco.primeraMenstruacion}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, primeraMenstruacion: e.target.value })}
-                  className="w-full"
-                />
-              </div>
+            <div className="pt-4 space-y-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Gestas</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={antecedentesGineco.gestas}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, gestas: e.target.value })}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Partos</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={antecedentesGineco.partos}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, partos: e.target.value })}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Cesáreas</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={antecedentesGineco.cesareas}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, cesareas: e.target.value })}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Abortos</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={antecedentesGineco.abortos}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, abortos: e.target.value })}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Hijos vivos</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={antecedentesGineco.hijosVivos}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, hijosVivos: e.target.value })}
+                    placeholder="0"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Menarquea (años)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="30"
+                    value={antecedentesGineco.menarquia}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, menarquia: e.target.value })}
+                    placeholder="Ej: 12"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-sm text-gray-700">Fecha última menstruación</Label>
+                  <Input
+                    type="date"
+                    value={antecedentesGineco.fechaUltimaMenstruacion}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, fechaUltimaMenstruacion: e.target.value })}
+                    className="h-8 text-sm w-full"
+                  />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-sm text-gray-700">Método anticonceptivo</Label>
+                  <Input
+                    type="text"
+                    value={antecedentesGineco.metodoAnticonceptivo}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, metodoAnticonceptivo: e.target.value })}
+                    placeholder="Ej: Preservativo, DIU, Ninguno..."
+                    className="h-8 text-sm w-full"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Último Papanicolaou</Label>
+                  <Input
+                    type="date"
+                    value={antecedentesGineco.ultimoPapanicolau}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, ultimoPapanicolau: e.target.value })}
+                    className="h-8 text-sm w-full"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-gray-700">Última Mamografía</Label>
+                  <Input
+                    type="date"
+                    value={antecedentesGineco.ultimaMastografia}
+                    onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, ultimaMastografia: e.target.value })}
+                    className="h-8 text-sm w-full"
+                  />
+                </div>
 
-              {/* Última Menstruación */}
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Última Menstruación</Label>
-                <Input
-                  type="date"
-                  value={antecedentesGineco.ultimaMenstruacion}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, ultimaMenstruacion: e.target.value })}
-                  className="w-full"
-                />
-              </div>
+                <div className="flex items-center gap-2 col-span-2 border-t pt-2 mt-1">
+                  <Label className="text-sm text-gray-700 w-28 shrink-0">Actividad sexual</Label>
+                  <RadioGroup
+                    value={antecedentesGineco.actividadSexual}
+                    onValueChange={(value: string) =>
+                      setAntecedentesGineco({
+                        ...antecedentesGineco,
+                        actividadSexual: value,
+                        actividadSexualObservacion: value === 'si' ? antecedentesGineco.actividadSexualObservacion : '',
+                      })
+                    }
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="si" id="actividad-sexual-si" />
+                      <Label htmlFor="actividad-sexual-si" className="text-sm cursor-pointer">Sí</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="actividad-sexual-no" />
+                      <Label htmlFor="actividad-sexual-no" className="text-sm cursor-pointer">No</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
 
-              {/* Características de la Menstruación */}
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Características de la Menstruación</Label>
-                <Textarea
-                  placeholder="Escribir las características de la menstruación..."
-                  value={antecedentesGineco.caracteristicasMenstruacion}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, caracteristicasMenstruacion: e.target.value })}
-                  className="w-full min-h-[120px] resize-none"
-                />
-              </div>
-
-              {/* Embarazos */}
-              <div className="flex items-center justify-between py-2 border-t pt-4">
-                <Label className="text-sm text-gray-700">Embarazos</Label>
-                <RadioGroup
-                  value={antecedentesGineco.embarazos}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, embarazos: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="embarazos-si" />
-                    <Label htmlFor="embarazos-si" className="text-sm cursor-pointer">Sí</Label>
+                {antecedentesGineco.actividadSexual === 'si' && (
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-sm text-gray-700">Observación actividad sexual (opcional)</Label>
+                    <Textarea
+                      placeholder="Detalle clínico relevante..."
+                      value={antecedentesGineco.actividadSexualObservacion}
+                      onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, actividadSexualObservacion: e.target.value })}
+                      className="w-full min-h-[80px] resize-none text-sm"
+                    />
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="embarazos-no" />
-                    <Label htmlFor="embarazos-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Cáncer Cérvico */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cáncer Cérvico</Label>
-                <RadioGroup
-                  value={antecedentesGineco.cancerCervico}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, cancerCervico: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="cervico-si" />
-                    <Label htmlFor="cervico-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="cervico-no" />
-                    <Label htmlFor="cervico-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Cáncer Uterino */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cáncer Uterino</Label>
-                <RadioGroup
-                  value={antecedentesGineco.cancerUterino}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, cancerUterino: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="uterino-si" />
-                    <Label htmlFor="uterino-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="uterino-no" />
-                    <Label htmlFor="uterino-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Cáncer de Mama */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Cáncer de Mama</Label>
-                <RadioGroup
-                  value={antecedentesGineco.cancerMama}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, cancerMama: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="mama-si" />
-                    <Label htmlFor="mama-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="mama-no" />
-                    <Label htmlFor="mama-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Actividad sexual del paciente */}
-              <div className="flex items-center justify-between py-2 border-b">
-                <Label className="text-sm text-gray-700">Actividad sexual del paciente</Label>
-                <RadioGroup
-                  value={antecedentesGineco.actividadSexual}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, actividadSexual: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="activ-sexual-si" />
-                    <Label htmlFor="activ-sexual-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="activ-sexual-no" />
-                    <Label htmlFor="activ-sexual-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Método de Planificación Familiar */}
-              <div className="space-y-2 pt-4">
-                <Label className="text-sm text-gray-700">Método de Planificación Familiar</Label>
-                <Input
-                  type="text"
-                  placeholder="Escribir método de planificación..."
-                  value={antecedentesGineco.metodoPlanificacion}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, metodoPlanificacion: e.target.value })}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Terapia de reemplazo hormonal */}
-              <div className="flex items-center justify-between py-2 border-b pt-4">
-                <Label className="text-sm text-gray-700">Terapia de reemplazo hormonal</Label>
-                <RadioGroup
-                  value={antecedentesGineco.terapiaHormonal}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, terapiaHormonal: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="terapia-si" />
-                    <Label htmlFor="terapia-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="terapia-no" />
-                    <Label htmlFor="terapia-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Último Papanicolau */}
-              <div className="space-y-2 pt-4">
-                <Label className="text-sm text-gray-700">Último Papanicolau</Label>
-                <Input
-                  type="date"
-                  value={antecedentesGineco.ultimoPapanicolau}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, ultimoPapanicolau: e.target.value })}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Última Mastografía */}
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Última Mastografía</Label>
-                <Input
-                  type="date"
-                  value={antecedentesGineco.ultimaMastografia}
-                  onChange={(e) => setAntecedentesGineco({ ...antecedentesGineco, ultimaMastografia: e.target.value })}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Otros */}
-              <div className="flex items-center justify-between py-2 border-t pt-4">
-                <Label className="text-sm text-gray-700">Otros</Label>
-                <RadioGroup
-                  value={antecedentesGineco.otros}
-                  onValueChange={(value: string) => 
-                    setAntecedentesGineco({ ...antecedentesGineco, otros: value })
-                  }
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="si" id="otros-gineco-si" />
-                    <Label htmlFor="otros-gineco-si" className="text-sm cursor-pointer">Sí</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="otros-gineco-no" />
-                    <Label htmlFor="otros-gineco-no" className="text-sm cursor-pointer">No</Label>
-                  </div>
-                </RadioGroup>
+                )}
               </div>
 
               {/* Botón de Guardar */}
@@ -1462,7 +1234,20 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
                 <Input
                   type="date"
                   value={antecedentesperinatales.ultimoCicloMenstrual}
-                  onChange={(e) => setAntecedentesperinatales({ ...antecedentesperinatales, ultimoCicloMenstrual: e.target.value })}
+                  onChange={(e) => {
+                    const ucm = e.target.value;
+                    let fpp = '';
+                    if (ucm) {
+                      const fecha = new Date(ucm + 'T00:00:00');
+                      fecha.setDate(fecha.getDate() + 280);
+                      fpp = fecha.toISOString().split('T')[0];
+                    }
+                    setAntecedentesperinatales({
+                      ...antecedentesperinatales,
+                      ultimoCicloMenstrual: ucm,
+                      fechaProbableParto: fpp,
+                    });
+                  }}
                   className="w-full"
                 />
               </div>
@@ -1514,12 +1299,16 @@ export function AntecedentesView({ pacienteId, pacienteNombre, antecedentes, onA
 
               {/* Fecha Probable de Parto */}
               <div className="space-y-2 pt-4">
-                <Label className="text-sm text-gray-700">Fecha Probable de Parto</Label>
+                <Label className="text-sm text-gray-700">
+                  Fecha Probable de Parto
+                  <span className="ml-2 text-xs text-indigo-500 font-normal">(calculada automáticamente)</span>
+                </Label>
                 <Input
                   type="date"
                   value={antecedentesperinatales.fechaProbableParto}
                   onChange={(e) => setAntecedentesperinatales({ ...antecedentesperinatales, fechaProbableParto: e.target.value })}
-                  className="w-full"
+                  className="w-full bg-indigo-50 border-indigo-200"
+                  placeholder="Se calcula al ingresar el UCM"
                 />
               </div>
 

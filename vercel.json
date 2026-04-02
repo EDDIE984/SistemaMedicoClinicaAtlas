@@ -4,6 +4,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/diagnostico-ia",
+      "destination": "/api/diagnostico-ia"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

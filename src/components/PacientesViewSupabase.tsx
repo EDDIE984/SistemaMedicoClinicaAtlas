@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { usePacientes, useSignosVitales, calcularIMC, calcularEdad, getIniciales } from '../hooks/usePacientes';
 import type { Paciente, SignoVital, ArchivoMedico } from '../lib/pacientesService';
+import { AlertasSignosVitalesPanel } from './AlertasSignosVitalesPanel';
+import { RANGOS_SIGNOS_VITALES } from '../lib/pacientesService';
 import { getArchivosByPaciente, createArchivoMedico, deleteArchivoMedico, getAntecedentesByPaciente, saveAntecedente } from '../lib/pacientesService';
 import { getCitasByPaciente, formatearFecha, formatearHora, getColorEstado, marcarCitaCompletada, updateCita, type CitaCompleta } from '../lib/citasService';
 import { crearConsultaMedica, getConsultaMedicaByCita, type ConsultaMedica } from '../lib/consultasService.ts';
@@ -36,7 +38,9 @@ import {
   Loader2,
   Clock,
   Pencil,
-  Stethoscope
+  Stethoscope,
+  AlertTriangle,
+  Brain
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -149,7 +153,15 @@ export function PacientesViewSupabase({
   const [isLoadingAntecedentes, setIsLoadingAntecedentes] = useState(false);
 
   // Hook para signos vitales del paciente seleccionado
-  const { signosVitales, guardarSignoVital } = useSignosVitales(selectedPatientId);
+  const { signosVitales, alertasActuales, loadAlertasForSigno, guardarSignoVital } = useSignosVitales(selectedPatientId);
+
+  // Recargar alertas cuando el usuario navega entre registros de signos vitales
+  useEffect(() => {
+    if (!selectedPatientId || signosVitales.length === 0) return;
+    const idx = signosVitalesIndex[selectedPatientId] || 0;
+    const signo = signosVitales[idx];
+    if (signo) loadAlertasForSigno(signo.id_signo_vital);
+  }, [signosVitalesIndex, selectedPatientId, signosVitales, loadAlertasForSigno]);
 
   // Formulario de nuevo paciente
   const [newPatient, setNewPatient] = useState({
@@ -209,12 +221,19 @@ export function PacientesViewSupabase({
     receta_medica: '',
     pedido_examenes: '',
     fecha_seguimiento: '',
-    pedido_hospitalizacion: ''
+    pedido_hospitalizacion: '',
+    diagnostico: ''
   });
 
   // Sucursal seleccionada para crear la consulta
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState<number | null>(null);
   const [sucursales, setSucursales] = useState<any[]>([]);
+
+  // Estado para Diagnóstico IA
+  const [isLoadingDiagnosticoIA, setIsLoadingDiagnosticoIA] = useState(false);
+  const [sugerenciasDiagnostico, setSugerenciasDiagnostico] = useState<
+    { codigo: string; nombre: string; descripcion: string }[]
+  >([]);
 
   // Efecto de búsqueda automática REMOVIDO para usar botón manual
   // useEffect(() => {... }, [searchTerm]);
@@ -601,8 +620,10 @@ export function PacientesViewSupabase({
       receta_medica: '',
       pedido_examenes: '',
       fecha_seguimiento: '',
-      pedido_hospitalizacion: ''
+      pedido_hospitalizacion: '',
+      diagnostico: ''
     });
+    setSugerenciasDiagnostico([]);
     if (sucursales.length > 0) {
       setSucursalSeleccionada(sucursales[0].id_sucursal);
     }
@@ -656,9 +677,9 @@ export function PacientesViewSupabase({
     const nombresLegibles: Record<string, string> = {
       esquemaVacunacion: 'Esquema de Vacunación',
       alergias: 'Alergias',
-      antecedentesPatologicos: 'Antecedentes Patológicos',
-      antecedentesNoPatologicos: 'Antecedentes No Patológicos',
-      antecedentesHeredofamiliares: 'Antecedentes Heredofamiliares',
+      antecedentesPatologicos: 'Antecedentes patológicos personales',
+      antecedentesNoPatologicos: 'Hábitos',
+      antecedentesHeredofamiliares: 'Antecedentes patológicos familiares',
       antecedentesGineco: 'Antecedentes Gineco-Obstétricos',
       antecedentesperinatales: 'Antecedentes Perinatales',
       antecedentesPostnatales: 'Antecedentes Postnatales',
@@ -696,6 +717,66 @@ export function PacientesViewSupabase({
       setAntecedentesData(antecedentes);
     } catch (error) {
       console.error('Error al recargar antecedentes:', error);
+    }
+  };
+
+  // Obtener diagnóstico IA por CIE-10
+  const handleObtenerDiagnosticoIA = async () => {
+    if (!consultaForm.historial_clinico.trim()) return;
+    setIsLoadingDiagnosticoIA(true);
+    setSugerenciasDiagnostico([]);
+
+    try {
+      // Detectar si estamos en desarrollo local o producción Vercel
+      const isLocalDev = import.meta.env.DEV;
+
+      if (isLocalDev) {
+        // ✅ Modo desarrollo: simular respuesta IA
+        console.log('🔧 Modo desarrollo: usando mock de diagnóstico IA');
+        // Simular delay de red
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const mockDiagnosticos = [
+          {
+            codigo: 'J30.9',
+            nombre: 'Alergia no especificada',
+            descripcion: 'Reacción alérgica generalizada con síntomas de congestión y estornudos.'
+          },
+          {
+            codigo: 'J01.9',
+            nombre: 'Sinusitis aguda no especificada',
+            descripcion: 'Inflamación de los senos nasales, común con dolores de cabeza y congestión.'
+          },
+          {
+            codigo: 'J06.9',
+            nombre: 'Infección aguda de vías respiratorias superiores',
+            descripcion: 'Resfriado común o infección viral de vías aéreas superiores.'
+          }
+        ];
+        
+        setSugerenciasDiagnostico(mockDiagnosticos);
+        toast.success('⚠️ Usando datos de prueba (desarrollo local)');
+      } else {
+        // ✅ Modo producción: llamar a API real en Vercel
+        console.log('🚀 Modo producción: llamando a /api/diagnostico-ia');
+        const res = await fetch('/api/diagnostico-ia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hallazgos: consultaForm.historial_clinico }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error || 'Error al obtener diagnóstico IA');
+          return;
+        }
+        setSugerenciasDiagnostico(data.diagnosticos || []);
+        toast.success('Diagnóstico IA obtenido exitosamente');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Error de conexión con el servicio de IA');
+    } finally {
+      setIsLoadingDiagnosticoIA(false);
     }
   };
 
@@ -865,7 +946,8 @@ export function PacientesViewSupabase({
         id_paciente: selectedPatientId,
         id_usuario: usuarioData.id_usuario,
         historial_clinico: consultaForm.historial_clinico || null,
-        diagnostico: null,
+        diagnostico: consultaForm.diagnostico || null,
+        diagnostico_ia: consultaForm.diagnostico || null,
         receta_medica: consultaForm.receta_medica || null,
         pedido_examenes: consultaForm.pedido_examenes || null,
         observaciones: null,
@@ -907,7 +989,8 @@ export function PacientesViewSupabase({
           receta_medica: '',
           pedido_examenes: '',
           fecha_seguimiento: '',
-          pedido_hospitalizacion: ''
+          pedido_hospitalizacion: '',
+          diagnostico: ''
         });
 
         // Llamar callback si existe
@@ -1073,67 +1156,124 @@ export function PacientesViewSupabase({
                             })}
                           </span>
                         </div>
+
+                        {/* Panel de alertas */}
+                        <AlertasSignosVitalesPanel alertas={alertasActuales} />
+
                         <div className="grid grid-cols-2 gap-y-4 gap-x-2">
-                          <div className="flex items-center gap-2">
-                            <Ruler className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">Estatura</p>
-                              <p className="text-sm font-medium">{signoActual.estatura_cm || '-'} {signoActual.estatura_cm ? 'cm' : ''}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Weight className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">Peso</p>
-                              <p className="text-sm font-medium">{signoActual.peso_kg || '-'} {signoActual.peso_kg ? 'kg' : ''}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Activity className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">IMC</p>
-                              <p className="text-sm font-medium">{signoActual.imc || '-'}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Thermometer className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">Temp.</p>
-                              <p className="text-sm font-medium">{signoActual.temperatura_c || '-'} {signoActual.temperatura_c ? '°C' : ''}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Wind className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">F. Resp.</p>
-                              <p className="text-sm font-medium">{signoActual.frecuencia_respiratoria || '-'} {signoActual.frecuencia_respiratoria ? 'rpm' : ''}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Heart className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">F. Card.</p>
-                              <p className="text-sm font-medium">{signoActual.frecuencia_cardiaca || '-'} {signoActual.frecuencia_cardiaca ? 'bpm' : ''}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 col-span-2">
-                            <Activity className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">Presión Arterial</p>
-                              <p className="text-sm font-medium">
-                                {signoActual.presion_sistolica && signoActual.presion_diastolica
-                                  ? `${signoActual.presion_sistolica}/${signoActual.presion_diastolica}`
-                                  : '-'}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 col-span-2">
-                            <Droplet className="size-4 text-blue-600" />
-                            <div>
-                              <p className="text-xs text-gray-500">Sat. Oxígeno</p>
-                              <p className="text-sm font-medium">{signoActual.saturacion_oxigeno || '-'}%</p>
-                            </div>
-                          </div>
+                          {/* Helper inline: alerta para un campo */}
+                          {(() => {
+                            const alertaPor = (campo: string) =>
+                              alertasActuales.find(a => a.campo === campo);
+                            const claseValor = (campo: string) => {
+                              const a = alertaPor(campo);
+                              if (!a) return 'text-sm font-medium';
+                              return a.nivel === 'critico'
+                                ? 'text-sm font-medium text-red-600'
+                                : 'text-sm font-medium text-yellow-600';
+                            };
+                            const icono = (campo: string) => {
+                              const a = alertaPor(campo);
+                              if (!a) return null;
+                              return (
+                                <AlertTriangle
+                                  className={`inline size-3 ml-1 ${a.nivel === 'critico' ? 'text-red-500' : 'text-yellow-500'}`}
+                                />
+                              );
+                            };
+                            return (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <Ruler className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Estatura</p>
+                                    <p className="text-sm font-medium">{signoActual.estatura_cm || '-'} {signoActual.estatura_cm ? 'cm' : ''}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Weight className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Peso</p>
+                                    <p className="text-sm font-medium">{signoActual.peso_kg || '-'} {signoActual.peso_kg ? 'kg' : ''}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Activity className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">IMC</p>
+                                    <p className={claseValor('imc')}>
+                                      {signoActual.imc || '-'} {signoActual.imc ? RANGOS_SIGNOS_VITALES.imc.unidad : ''}
+                                      {icono('imc')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Thermometer className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Temp.</p>
+                                    <p className={claseValor('temperatura_c')}>
+                                      {signoActual.temperatura_c || '-'} {signoActual.temperatura_c ? '°C' : ''}
+                                      {icono('temperatura_c')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Wind className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">F. Resp.</p>
+                                    <p className={claseValor('frecuencia_respiratoria')}>
+                                      {signoActual.frecuencia_respiratoria || '-'} {signoActual.frecuencia_respiratoria ? 'rpm' : ''}
+                                      {icono('frecuencia_respiratoria')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Heart className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">F. Card.</p>
+                                    <p className={claseValor('frecuencia_cardiaca')}>
+                                      {signoActual.frecuencia_cardiaca || '-'} {signoActual.frecuencia_cardiaca ? 'bpm' : ''}
+                                      {icono('frecuencia_cardiaca')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 col-span-2">
+                                  <Activity className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Presión Arterial</p>
+                                    <p className={`text-sm font-medium flex items-center gap-1 ${
+                                      alertaPor('presion_sistolica') || alertaPor('presion_diastolica')
+                                        ? (alertaPor('presion_sistolica')?.nivel === 'critico' || alertaPor('presion_diastolica')?.nivel === 'critico'
+                                            ? 'text-red-600'
+                                            : 'text-yellow-600')
+                                        : ''
+                                    }`}>
+                                      {signoActual.presion_sistolica && signoActual.presion_diastolica
+                                        ? `${signoActual.presion_sistolica}/${signoActual.presion_diastolica} mmHg`
+                                        : '-'}
+                                      {(alertaPor('presion_sistolica') || alertaPor('presion_diastolica')) && (
+                                        <AlertTriangle className={`size-3 ${
+                                          alertaPor('presion_sistolica')?.nivel === 'critico' || alertaPor('presion_diastolica')?.nivel === 'critico'
+                                            ? 'text-red-500'
+                                            : 'text-yellow-500'
+                                        }`} />
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 col-span-2">
+                                  <Droplet className="size-4 text-blue-600 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-gray-500">Sat. Oxígeno</p>
+                                    <p className={claseValor('saturacion_oxigeno')}>
+                                      {signoActual.saturacion_oxigeno != null ? `${signoActual.saturacion_oxigeno}%` : '-'}
+                                      {icono('saturacion_oxigeno')}
+                                    </p>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     ) : (
@@ -1740,7 +1880,7 @@ export function PacientesViewSupabase({
               />
             </div>
 
-            {/* Historial Clínico */}
+            {/* Hallazgos en la consulta */}
             <div className="space-y-2">
               <Label htmlFor="historialClinico" className="text-sm">Hallazgos en la consulta</Label>
               <Textarea
@@ -1750,6 +1890,66 @@ export function PacientesViewSupabase({
                 placeholder="HALLAZGOS CLÍNICOS, DIAGNÓSTICO, OBSERVACIONES..."
                 className="min-h-[100px] text-sm uppercase"
               />
+            </div>
+
+            {/* Diagnóstico IA */}
+            <div className="space-y-3 border border-purple-200 rounded-lg p-4 bg-purple-50">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium text-purple-900 flex items-center gap-2">
+                  <Brain className="size-4" />
+                  Diagnóstico IA (CIE-10)
+                </Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                  disabled={!consultaForm.historial_clinico.trim() || isLoadingDiagnosticoIA}
+                  onClick={handleObtenerDiagnosticoIA}
+                >
+                  {isLoadingDiagnosticoIA ? (
+                    <><Loader2 className="size-3 mr-1 animate-spin" />Analizando...</>
+                  ) : (
+                    <><Brain className="size-3 mr-1" />Obtener diagnóstico IA</>
+                  )}
+                </Button>
+              </div>
+
+              {sugerenciasDiagnostico.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-purple-700 font-medium">Selecciona una sugerencia para aplicarla:</p>
+                  {sugerenciasDiagnostico.map((d, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setConsultaForm({ ...consultaForm, diagnostico: `${d.codigo} - ${d.nombre}` })}
+                      className={`w-full text-left px-3 py-2 rounded-md border transition-colors text-sm ${
+                        consultaForm.diagnostico === `${d.codigo} - ${d.nombre}`
+                          ? 'border-purple-500 bg-purple-100 text-purple-900'
+                          : 'border-purple-200 bg-white hover:border-purple-400 hover:bg-purple-50 text-gray-800'
+                      }`}
+                    >
+                      <span className="font-mono font-bold text-purple-700">{d.codigo}</span>
+                      {' — '}
+                      <span className="font-medium">{d.nombre}</span>
+                      <br />
+                      <span className="text-xs text-gray-500">{d.descripcion}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <Textarea
+                  value={consultaForm.diagnostico}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                    setConsultaForm({ ...consultaForm, diagnostico: e.target.value.toUpperCase() })
+                  }
+                  placeholder="Diagnóstico confirmado (selecciona una sugerencia o escribe manualmente)..."
+                  className="min-h-[60px] text-sm uppercase"
+                />
+              </div>
+              <p className="text-xs text-purple-600">⚕️ La IA es una referencia. El médico confirma el diagnóstico final.</p>
             </div>
 
             {/* Receta Médica */}

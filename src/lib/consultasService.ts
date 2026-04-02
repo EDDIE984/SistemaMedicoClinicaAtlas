@@ -8,6 +8,7 @@ export interface ConsultaMedica {
   fecha_consulta: string;
   historial_clinico: string | null;
   diagnostico: string | null;
+  diagnostico_ia: string | null;
   receta_medica: string | null;
   pedido_examenes: string | null;
   observaciones: string | null;

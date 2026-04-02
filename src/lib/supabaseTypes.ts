@@ -421,6 +421,41 @@ export interface Database {
           created_at?: string
         }
       },
+      alerta_signo_vital: {
+        Row: {
+          id_alerta: number
+          id_signo_vital: number
+          campo: string
+          valor: number | null
+          rango_min: number | null
+          rango_max: number | null
+          nivel: 'advertencia' | 'critico'
+          descripcion: string | null
+          created_at: string
+        }
+        Insert: {
+          id_alerta?: number
+          id_signo_vital: number
+          campo: string
+          valor?: number | null
+          rango_min?: number | null
+          rango_max?: number | null
+          nivel: 'advertencia' | 'critico'
+          descripcion?: string | null
+          created_at?: string
+        }
+        Update: {
+          id_alerta?: number
+          id_signo_vital?: number
+          campo?: string
+          valor?: number | null
+          rango_min?: number | null
+          rango_max?: number | null
+          nivel?: 'advertencia' | 'critico'
+          descripcion?: string | null
+          created_at?: string
+        }
+      },
       archivo_medico: {
         Row: {
           id_archivo: number

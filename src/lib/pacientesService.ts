@@ -38,6 +38,18 @@ export interface SignoVital {
   created_at?: string;
 }
 
+export interface AlertaSignoVital {
+  id_alerta: number;
+  id_signo_vital: number;
+  campo: string;
+  valor: number | null;
+  rango_min: number | null;
+  rango_max: number | null;
+  nivel: 'advertencia' | 'critico';
+  descripcion: string | null;
+  created_at?: string;
+}
+
 export interface Antecedente {
   id_antecedente: number;
   id_paciente: number;
@@ -338,6 +350,167 @@ export async function deletePaciente(id_paciente: number): Promise<boolean> {
 }
 
 // ========================================
+// RANGOS CLÍNICOS NORMALES DE SIGNOS VITALES
+// ========================================
+
+interface RangoSignoVital {
+  etiqueta: string;
+  unidad: string;
+  normalMin: number;
+  normalMax: number;
+  advertenciaMin: number;
+  advertenciaMax: number;
+  criticoMin: number;
+  criticoMax: number;
+  soloMin?: boolean; // Para saturación de O2 (solo límite inferior)
+}
+
+export const RANGOS_SIGNOS_VITALES: Record<string, RangoSignoVital> = {
+  temperatura_c: {
+    etiqueta: 'Temperatura',
+    unidad: '°C',
+    normalMin: 36.1, normalMax: 37.2,
+    advertenciaMin: 36.0, advertenciaMax: 37.5,
+    criticoMin: 35.0, criticoMax: 38.5,
+  },
+  frecuencia_cardiaca: {
+    etiqueta: 'Frecuencia Cardíaca',
+    unidad: 'bpm',
+    normalMin: 60, normalMax: 100,
+    advertenciaMin: 55, advertenciaMax: 105,
+    criticoMin: 50, criticoMax: 120,
+  },
+  frecuencia_respiratoria: {
+    etiqueta: 'Frecuencia Respiratoria',
+    unidad: 'rpm',
+    normalMin: 12, normalMax: 20,
+    advertenciaMin: 11, advertenciaMax: 22,
+    criticoMin: 10, criticoMax: 25,
+  },
+  presion_sistolica: {
+    etiqueta: 'Presión Sistólica',
+    unidad: 'mmHg',
+    normalMin: 90, normalMax: 120,
+    advertenciaMin: 85, advertenciaMax: 140,
+    criticoMin: 80, criticoMax: 160,
+  },
+  presion_diastolica: {
+    etiqueta: 'Presión Diastólica',
+    unidad: 'mmHg',
+    normalMin: 60, normalMax: 80,
+    advertenciaMin: 55, advertenciaMax: 90,
+    criticoMin: 50, criticoMax: 100,
+  },
+  saturacion_oxigeno: {
+    etiqueta: 'Saturación de Oxígeno',
+    unidad: '%',
+    normalMin: 95, normalMax: 100,
+    advertenciaMin: 91, advertenciaMax: 100,
+    criticoMin: 90, criticoMax: 100,
+    soloMin: true,
+  },
+  imc: {
+    etiqueta: 'IMC',
+    unidad: 'kg/m²',
+    normalMin: 18.5, normalMax: 24.9,
+    advertenciaMin: 17.0, advertenciaMax: 29.9,
+    criticoMin: 16.0, criticoMax: 40.0,
+  },
+};
+
+/**
+ * Evalúa un registro de signos vitales y retorna las alertas generadas
+ */
+export function evaluarSignosVitales(
+  signo: SignoVital
+): Omit<AlertaSignoVital, 'id_alerta' | 'created_at'>[] {
+  const alertas: Omit<AlertaSignoVital, 'id_alerta' | 'created_at'>[] = [];
+
+  for (const [campo, rango] of Object.entries(RANGOS_SIGNOS_VITALES)) {
+    const valor = signo[campo as keyof SignoVital] as number | null;
+    if (valor === null || valor === undefined) continue;
+
+    let nivel: 'advertencia' | 'critico' | null = null;
+    let descripcion = '';
+
+    if (valor < rango.criticoMin || (!rango.soloMin && valor > rango.criticoMax)) {
+      nivel = 'critico';
+      descripcion = valor < rango.criticoMin
+        ? `${rango.etiqueta} muy baja: ${valor} ${rango.unidad} (mín. normal: ${rango.normalMin})`
+        : `${rango.etiqueta} muy alta: ${valor} ${rango.unidad} (máx. normal: ${rango.normalMax})`;
+    } else if (valor < rango.advertenciaMin || (!rango.soloMin && valor > rango.advertenciaMax)) {
+      nivel = 'advertencia';
+      descripcion = valor < rango.advertenciaMin
+        ? `${rango.etiqueta} baja: ${valor} ${rango.unidad} (mín. normal: ${rango.normalMin})`
+        : `${rango.etiqueta} alta: ${valor} ${rango.unidad} (máx. normal: ${rango.normalMax})`;
+    }
+
+    if (nivel) {
+      alertas.push({
+        id_signo_vital: signo.id_signo_vital,
+        campo,
+        valor,
+        rango_min: rango.normalMin,
+        rango_max: rango.soloMin ? null : rango.normalMax,
+        nivel,
+        descripcion,
+      });
+    }
+  }
+
+  return alertas;
+}
+
+/**
+ * Guarda (reemplaza) las alertas de un registro de signos vitales
+ */
+export async function saveAlertasSignoVital(
+  id_signo_vital: number,
+  alertas: Omit<AlertaSignoVital, 'id_alerta' | 'created_at'>[]
+): Promise<void> {
+  try {
+    // Borrar alertas previas del registro
+    await (supabaseAdmin.from('alerta_signo_vital') as any)
+      .delete()
+      .eq('id_signo_vital', id_signo_vital);
+
+    if (alertas.length === 0) return;
+
+    const { error } = await (supabaseAdmin.from('alerta_signo_vital') as any)
+      .insert(alertas);
+
+    if (error) {
+      console.error('❌ Error al guardar alertas de signos vitales:', error);
+    } else {
+      console.log(`✅ ${alertas.length} alerta(s) guardada(s) para signo vital ${id_signo_vital}`);
+    }
+  } catch (error) {
+    console.error('❌ Error inesperado al guardar alertas:', error);
+  }
+}
+
+/**
+ * Obtener alertas de un registro de signos vitales
+ */
+export async function getAlertasBySignoVital(id_signo_vital: number): Promise<AlertaSignoVital[]> {
+  try {
+    const { data, error } = await (supabaseAdmin.from('alerta_signo_vital') as any)
+      .select('*')
+      .eq('id_signo_vital', id_signo_vital)
+      .order('nivel', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error al obtener alertas:', error);
+      return [];
+    }
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error inesperado al obtener alertas:', error);
+    return [];
+  }
+}
+
+// ========================================
 // FUNCIONES DE SIGNOS VITALES
 // ========================================
 
@@ -403,6 +576,11 @@ export async function createSignoVital(signo: Omit<SignoVital, 'id_signo_vital' 
     }
 
     console.log('✅ Signos vitales guardados exitosamente');
+
+    // Evaluar y guardar alertas automáticamente
+    const alertas = evaluarSignosVitales(data as SignoVital);
+    await saveAlertasSignoVital(data.id_signo_vital, alertas);
+
     return data;
   } catch (error) {
     console.error('❌ Error inesperado al crear signos vitales:', error);
@@ -439,34 +617,13 @@ export async function updateSignoVital(id_signo_vital: number, updates: Partial<
 // FUNCIONES DE ANTECEDENTES MÉDICOS
 // ========================================
 
-// Almacenamiento en memoria y localStorage para antecedentes
-const ANTECEDENTES_STORAGE_KEY = 'medical_antecedentes';
+const ANTECEDENTE_TIPO_JSON = 'json';
 
-interface AntecedentesStorage {
-  [pacienteId: number]: any;
-}
-
-/**
- * Cargar antecedentes desde localStorage
- */
-function cargarAntecedentesStorage(): AntecedentesStorage {
+function parseAntecedenteDescripcion(descripcion: string): any {
   try {
-    const stored = localStorage.getItem(ANTECEDENTES_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch (error) {
-    console.error('Error al cargar antecedentes del localStorage:', error);
-    return {};
-  }
-}
-
-/**
- * Guardar antecedentes en localStorage
- */
-function guardarAntecedentesStorage(storage: AntecedentesStorage): void {
-  try {
-    localStorage.setItem(ANTECEDENTES_STORAGE_KEY, JSON.stringify(storage));
-  } catch (error) {
-    console.error('Error al guardar antecedentes en localStorage:', error);
+    return JSON.parse(descripcion);
+  } catch {
+    return descripcion;
   }
 }
 
@@ -477,8 +634,26 @@ export async function getAntecedentesByPaciente(id_paciente: number): Promise<an
   try {
     console.log('🔍 Obteniendo antecedentes del paciente:', id_paciente);
 
-    const storage = cargarAntecedentesStorage();
-    const antecedentes = storage[id_paciente] || {};
+    const { data, error } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .select('categoria, tipo, descripcion, updated_at')
+      .eq('id_paciente', id_paciente)
+      .eq('estado', 'activo')
+      .order('updated_at', { ascending: false })
+      .order('id_antecedente', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error al obtener antecedentes desde BD:', error);
+      return {};
+    }
+
+    const antecedentes: Record<string, any> = {};
+    for (const row of data || []) {
+      const categoria = row.categoria as string;
+      // Mantener el registro más reciente de cada categoría.
+      if (antecedentes[categoria] !== undefined) continue;
+      antecedentes[categoria] = parseAntecedenteDescripcion(row.descripcion as string);
+    }
 
     console.log(`✅ Antecedentes cargados para paciente ${id_paciente}`);
     return antecedentes;
@@ -495,20 +670,35 @@ export async function saveAntecedente(id_paciente: number, tipo: string, datos: 
   try {
     console.log('💾 Guardando antecedente:', { id_paciente, tipo });
 
-    const storage = cargarAntecedentesStorage();
+    const descripcion = JSON.stringify(datos ?? null);
 
-    // Obtener antecedentes actuales del paciente
-    const antecedentesActuales = storage[id_paciente] || {};
+    const { error: updateError } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .update({ estado: 'inactivo' })
+      .eq('id_paciente', id_paciente)
+      .eq('categoria', tipo)
+      .eq('tipo', ANTECEDENTE_TIPO_JSON)
+      .eq('estado', 'activo');
 
-    // Actualizar con los nuevos datos
-    storage[id_paciente] = {
-      ...antecedentesActuales,
-      [tipo]: datos,
-      updated_at: new Date().toISOString()
-    };
+    if (updateError) {
+      console.error('❌ Error al desactivar antecedente previo:', updateError);
+      return false;
+    }
 
-    // Guardar en localStorage
-    guardarAntecedentesStorage(storage);
+    const { error: insertError } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .insert({
+        id_paciente,
+        categoria: tipo,
+        tipo: ANTECEDENTE_TIPO_JSON,
+        descripcion,
+        estado: 'activo'
+      });
+
+    if (insertError) {
+      console.error('❌ Error al guardar antecedente en BD:', insertError);
+      return false;
+    }
 
     console.log('✅ Antecedente guardado exitosamente');
     return true;
@@ -522,31 +712,86 @@ export async function saveAntecedente(id_paciente: number, tipo: string, datos: 
  * Funciones legacy para compatibilidad
  */
 export async function createAntecedente(antecedente: Omit<Antecedente, 'id_antecedente' | 'created_at' | 'estado'>): Promise<Antecedente | null> {
-  const success = await saveAntecedente(
-    antecedente.id_paciente,
-    antecedente.tipo_antecedente,
-    JSON.parse(antecedente.descripcion)
-  );
+  try {
+    const categoria = antecedente.tipo_antecedente || 'general';
+    const { data, error } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .insert({
+        id_paciente: antecedente.id_paciente,
+        categoria,
+        tipo: categoria,
+        descripcion: antecedente.descripcion,
+        fecha_diagnostico: antecedente.fecha_diagnostico,
+        estado: 'activo'
+      })
+      .select()
+      .single();
 
-  if (success) {
+    if (error || !data) {
+      console.error('❌ Error al crear antecedente:', error);
+      return null;
+    }
+
     return {
-      id_antecedente: Date.now(),
-      ...antecedente,
-      estado: 'activo',
-      created_at: new Date().toISOString()
-    };
+      id_antecedente: data.id_antecedente,
+      id_paciente: data.id_paciente,
+      tipo_antecedente: data.categoria,
+      descripcion: data.descripcion,
+      fecha_diagnostico: data.fecha_diagnostico,
+      estado: data.estado,
+      created_at: data.created_at
+    } as Antecedente;
+  } catch (error) {
+    console.error('❌ Error inesperado al crear antecedente:', error);
+    return null;
   }
-  return null;
 }
 
 export async function updateAntecedente(id_antecedente: number, updates: Partial<Antecedente>): Promise<boolean> {
-  console.log('⚠️ updateAntecedente está deprecada, usar saveAntecedente');
-  return true;
+  try {
+    const payload: Record<string, any> = {};
+    if (typeof updates.descripcion === 'string') payload.descripcion = updates.descripcion;
+    if (updates.fecha_diagnostico !== undefined) payload.fecha_diagnostico = updates.fecha_diagnostico;
+    if (updates.estado) payload.estado = updates.estado;
+    if (updates.tipo_antecedente) {
+      payload.categoria = updates.tipo_antecedente;
+      payload.tipo = updates.tipo_antecedente;
+    }
+
+    const { error } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .update(payload)
+      .eq('id_antecedente', id_antecedente);
+
+    if (error) {
+      console.error('❌ Error al actualizar antecedente:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Error inesperado al actualizar antecedente:', error);
+    return false;
+  }
 }
 
 export async function deleteAntecedente(id_antecedente: number): Promise<boolean> {
-  console.log('⚠️ deleteAntecedente no implementada');
-  return true;
+  try {
+    const { error } = await (supabaseAdmin
+      .from('antecedente') as any)
+      .update({ estado: 'inactivo' })
+      .eq('id_antecedente', id_antecedente);
+
+    if (error) {
+      console.error('❌ Error al eliminar antecedente:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Error inesperado al eliminar antecedente:', error);
+    return false;
+  }
 }
 
 // ========================================
